@@ -220,3 +220,76 @@ def test_analytics_summary():
     assert isinstance(data["total_incidents"], int)
 
     assert "threats_by_type" in data
+
+import json
+from backend.app.services.ai_service import ai_service
+
+
+def test_evidence_relationships_survive_analysis(monkeypatch):
+    """
+    Regression test: evidence_relationships, observed_evidence, ai_inference,
+    and uncertainty returned by Gemini must survive unchanged through
+    parsing and into the API response. Previously, evidence_relationships
+    was hardcoded to [] and silently dropped.
+    """
+
+    fake_gemini_response = {
+        "incident_id": "inc-test-001",
+        "risk_level": "HIGH",
+        "risk_score": 85,
+        "confidence": 80,
+        "threat_type": "Phishing",
+        "summary": "Test phishing summary.",
+        "explanation": "Test explanation.",
+        "explanation_simple": "Test simple explanation.",
+        "warning_signs": ["Urgency tactics"],
+        "indicators": ["Suspicious domain"],
+        "tactics_observed": ["Social Engineering Lure"],
+        "recommended_actions": [],
+        "affected_accounts": [],
+        "timeline_events": [],
+        "potential_impact": "Test impact.",
+        "origin_assessment": "Test origin.",
+        "observed_evidence": ["Message references bank name X"],
+        "ai_inference": ["Likely impersonation attempt based on urgency and link"],
+        "uncertainty": ["Sender identity cannot be verified from text alone"],
+        "evidence_relationships": [
+            {
+                "source_id": "ev-0001",
+                "target_id": "ev-0002",
+                "relationship_type": "leads_to",
+                "description": "SMS links to the malicious URL."
+            }
+        ],
+    }
+
+    def fake_call_gemini(self, contents):
+        return json.dumps(fake_gemini_response)
+
+    monkeypatch.setattr(
+        "backend.app.services.ai_service.AIService._call_gemini",
+        fake_call_gemini,
+    )
+
+    response = client.post(
+        "/api/analyze/text",
+        json={"text": "Your bank account requires urgent verification: http://fake-bank.example/verify"},
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+
+    assert "evidence_relationships" in data
+    assert len(data["evidence_relationships"]) == 1
+    rel = data["evidence_relationships"][0]
+    assert rel["source_id"] == "ev-0001"
+    assert rel["target_id"] == "ev-0002"
+    assert rel["relationship_type"] == "leads_to"
+
+    assert data["observed_evidence"] == ["Message references bank name X"]
+    assert data["ai_inference"] == [
+        "Likely impersonation attempt based on urgency and link"
+    ]
+    assert data["uncertainty"] == [
+        "Sender identity cannot be verified from text alone"
+    ]
