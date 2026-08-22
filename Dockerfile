@@ -3,16 +3,16 @@ FROM python:3.11-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8000
+  PYTHONDONTWRITEBYTECODE=1 \
+  PORT=8080
 
 WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+  build-essential \
+  curl \
+  && rm -rf /var/lib/apt/lists/*
 
 # Copy and install python dependencies
 COPY requirements.txt .
@@ -23,7 +23,7 @@ COPY backend /app/backend
 COPY .env.example /app/.env.example
 
 # Expose container port
-EXPOSE 8000
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
