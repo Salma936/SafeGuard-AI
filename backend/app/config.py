@@ -4,10 +4,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def _get_gemini_model() -> str:
+    val = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
+    if val in ["gemini-2.0-flash", "models/gemini-2.0-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash"]:
+        return "gemini-3.6-flash"
+    return val or "gemini-3.6-flash"
+
 class Settings:
     PROJECT_NAME: str = "SafeGuard AI Analysis Engine"
     VERSION: str = "2.4.0"
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    GEMINI_MODEL: str = _get_gemini_model()
     
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./safeguard.db")

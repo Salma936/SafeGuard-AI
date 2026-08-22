@@ -93,16 +93,37 @@ class AIService:
         if not self.client:
             raise ValueError("GEMINI_API_KEY environment variable is not configured or SDK is unavailable.")
 
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                response_mime_type="application/json",
-                temperature=0.1
+        target_model = self.model or "gemini-3.6-flash"
+        if target_model in ["gemini-2.0-flash", "models/gemini-2.0-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash"]:
+            target_model = "gemini-3.6-flash"
+
+        try:
+            response = self.client.models.generate_content(
+                model=target_model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    response_mime_type="application/json",
+                    temperature=0.1
+                )
             )
-        )
-        return response.text or "{}"
+            return response.text or "{}"
+        except Exception as err:
+            err_str = str(err)
+            if ("404" in err_str or "not found" in err_str.lower() or "gemini-2.0-flash" in err_str) and target_model != "gemini-3.6-flash":
+                print(f"[AIService] Model {target_model} unavailable. Retrying with gemini-3.6-flash: {err}")
+                self.model = "gemini-3.6-flash"
+                response = self.client.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        response_mime_type="application/json",
+                        temperature=0.1
+                    )
+                )
+                return response.text or "{}"
+            raise
 
     def analyze_text(self, text: str, incident_id: Optional[str] = None) -> InvestigationResultSchema:
         """Analyze text message or digital evidence content."""
