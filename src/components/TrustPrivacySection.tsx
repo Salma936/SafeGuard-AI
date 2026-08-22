@@ -1,7 +1,13 @@
 import React from 'react';
 import { Eye, ShieldCheck, HelpCircle, LifeBuoy } from 'lucide-react';
+import { ViewMode } from '../types';
 
-export const TrustPrivacySection: React.FC = () => {
+interface TrustPrivacySectionProps {
+  onNavigate?: (view: ViewMode) => void;
+  onOpenAboutModal?: () => void;
+}
+
+export const TrustPrivacySection: React.FC<TrustPrivacySectionProps> = () => {
   const pillars = [
     {
       id: 'pillar-1',

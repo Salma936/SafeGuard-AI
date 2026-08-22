@@ -6,7 +6,7 @@ interface HeaderProps {
   currentView: ViewMode;
   onNavigate: (view: ViewMode) => void;
   onScrollToSection: (sectionId: string) => void;
-  onOpenModal: (modal: 'about' | 'signin') => void;
+  onOpenModal: (modal: 'about' | 'signin' | 'services' | 'pricing' | 'company' | 'blog') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({

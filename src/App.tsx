@@ -19,7 +19,7 @@ import { InvestigationWorkspace } from './components/InvestigationWorkspace';
 
 export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('landing');
-  const [activeModal, setActiveModal] = useState<'about' | 'signin' | null>(null);
+  const [activeModal, setActiveModal] = useState<'about' | 'signin' | 'services' | 'pricing' | 'company' | 'blog' | null>(null);
   const [selectedDemoCase, setSelectedDemoCase] = useState<IncidentCase>(DEMO_INCIDENTS[0]);
 
   const handleNavigate = (view: ViewMode) => {

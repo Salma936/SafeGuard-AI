@@ -3,7 +3,7 @@ import { ViewMode } from '../types';
 
 interface FooterProps {
   onNavigate: (view: ViewMode) => void;
-  onOpenModal: (modal: 'services' | 'pricing' | 'company' | 'blog' | 'signin') => void;
+  onOpenModal: (modal: 'about' | 'services' | 'pricing' | 'company' | 'blog' | 'signin') => void;
   onScrollToSection?: (sectionId: string) => void;
 }
 
