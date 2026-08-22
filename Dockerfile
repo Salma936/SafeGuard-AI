@@ -36,14 +36,12 @@ COPY backend/ /app/backend/
 # Copy built frontend assets from Stage 1
 COPY --from=frontend-builder /app/dist /app/dist
 
+RUN mkdir -p /app/storage/uploads
+
 # Expose default Cloud Run container port
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8080}/health || exit 1
-
-# Start uvicorn server binding to dynamic $PORT
-CMD uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1
+# Start uvicorn server binding to dynamic $PORT using exec form for proper PID 1 signal handling
+CMD ["sh", "-c", "exec uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1"]
 
 

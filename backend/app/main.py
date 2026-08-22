@@ -15,13 +15,6 @@ from backend.app.routers import (
     analytics,
 )
 
-# Eagerly initialize SQLite schema for local development and testing
-try:
-    init_db()
-except Exception as exc:
-    print(f"[SafeGuard] Initial DB bootstrap notice: {exc}")
-
-
 # =========================================================
 # LIFESPAN — runs AFTER uvicorn binds to the port
 # =========================================================
