@@ -481,3 +481,147 @@ def test_analyze_video_gemini_failure_returns_error(monkeypatch):
 
     assert response.status_code == 500
     assert "failed" in response.json()["detail"].lower()
+
+
+def test_incident_correlation_analysis(monkeypatch):
+    """
+    Full correlation flow: create incident, add two evidence items, mock
+    Gemini's synthesis response, run POST /api/incidents/{id}/analyze, and
+    verify evidence_relationships, contradictions, missing_evidence, and
+    timeline all come through and persist correctly.
+    """
+
+    # --- 1. Create incident ---
+    create_resp = client.post(
+        "/api/incidents",
+        json={
+            "title": "Correlation Test Incident",
+            "category": "Phishing",
+            "summary": "Multi-evidence phishing scenario for correlation testing.",
+            "risk_level": "HIGH",
+            "threat_type": "Phishing",
+        },
+    )
+    assert create_resp.status_code in (200, 201), create_resp.text
+    inc_id = create_resp.json()["incident_id"]
+
+    # --- 2. Add two evidence items ---
+    ev1_resp = client.post(
+        f"/api/incidents/{inc_id}/evidence",
+        json={"type": "text", "title": "Fake bank SMS", "content": "Your account is locked, click here: http://fake-bank.example"},
+    )
+    assert ev1_resp.status_code in (200, 201), ev1_resp.text
+    ev1_id = ev1_resp.json()["evidence_id"]
+
+    ev2_resp = client.post(
+        f"/api/incidents/{inc_id}/evidence",
+        json={"type": "url", "title": "Malicious link", "content": "http://fake-bank.example/verify"},
+    )
+    assert ev2_resp.status_code in (200, 201), ev2_resp.text
+    ev2_id = ev2_resp.json()["evidence_id"]
+
+    # --- 3. Mock the Gemini call used inside synthesize_incident ---
+    fake_synthesis_response = {
+        "incident_id": inc_id,
+        "risk_level": "CRITICAL",
+        "risk_score": 92,
+        "confidence": 85,
+        "threat_type": "Phishing",
+        "summary": "Coordinated phishing attack reconstructed from SMS and malicious URL.",
+        "explanation": "Test explanation.",
+        "explanation_simple": "Test simple explanation.",
+        "warning_signs": ["Urgency tactics", "Suspicious domain"],
+        "indicators": ["Lookalike domain"],
+        "tactics_observed": ["Social Engineering Lure", "Credential Harvesting"],
+        "recommended_actions": [],
+        "affected_accounts": [],
+        "timeline_events": [
+            {
+                "id": "t-corr-1",
+                "timestamp": "10:00",
+                "phase": "Contact",
+                "title": "Initial SMS contact",
+                "description": "Victim received fake bank SMS.",
+                "relatedEvidenceIds": [ev1_id],
+                "severity": "high",
+            }
+        ],
+        "evidence_relationships": [
+            {
+                "source_id": ev1_id,
+                "target_id": ev2_id,
+                "relationship_type": "leads_to",
+                "description": "SMS contains the malicious URL.",
+            }
+        ],
+        "potential_impact": "Credential compromise.",
+        "origin_assessment": "Coordinated phishing campaign.",
+        "observed_evidence": ["SMS references bank name", "URL uses lookalike domain"],
+        "ai_inference": ["Likely same threat actor across both items"],
+        "uncertainty": ["Actor identity cannot be confirmed"],
+        "contradictions": [],
+        "missing_evidence": ["No screenshot of the fake login page was provided"],
+    }
+
+    def fake_call_gemini(self, contents):
+        return json.dumps(fake_synthesis_response)
+
+    monkeypatch.setattr(
+        "backend.app.services.ai_service.AIService._call_gemini",
+        fake_call_gemini,
+    )
+
+    # --- 4. Run correlation ---
+    correlate_resp = client.post(f"/api/incidents/{inc_id}/analyze")
+    assert correlate_resp.status_code == 200, correlate_resp.text
+    data = correlate_resp.json()
+
+    assert data["risk_level"] == "CRITICAL"
+    assert len(data["evidence_relationships"]) == 1
+    rel = data["evidence_relationships"][0]
+    assert rel["source_id"] == ev1_id
+    assert rel["target_id"] == ev2_id
+    assert rel["relationship_type"] == "leads_to"
+
+    assert data["missing_evidence"] == ["No screenshot of the fake login page was provided"]
+    assert data["contradictions"] == []
+    assert data["observed_evidence"] == [
+        "SMS references bank name", "URL uses lookalike domain"
+    ]
+
+    # --- 5. Verify timeline actually persisted to the DB via GET timeline ---
+    timeline_resp = client.get(f"/api/incidents/{inc_id}/timeline")
+    assert timeline_resp.status_code == 200, timeline_resp.text
+    timeline_data = timeline_resp.json()
+    assert any(t["title"] == "Initial SMS contact" for t in timeline_data)
+
+    # --- 6. Verify incident's own risk fields were updated ---
+    get_resp = client.get(f"/api/incidents/{inc_id}")
+    assert get_resp.status_code == 200
+    inc_data = get_resp.json()
+    assert inc_data["risk_level"] == "CRITICAL"
+
+
+def test_incident_correlation_no_evidence():
+    """Correlation on an incident with zero evidence should fail cleanly, not fabricate a result."""
+    create_resp = client.post(
+        "/api/incidents",
+        json={
+            "title": "Empty Incident",
+            "category": "Phishing",
+            "summary": "No evidence yet.",
+            "risk_level": "LOW",
+            "threat_type": "Phishing",
+        },
+    )
+    assert create_resp.status_code in (200, 201)
+    inc_id = create_resp.json()["incident_id"]
+
+    correlate_resp = client.post(f"/api/incidents/{inc_id}/analyze")
+    assert correlate_resp.status_code == 400
+
+
+def test_incident_correlation_not_found():
+    """Correlation on a nonexistent incident returns 404."""
+    response = client.post("/api/incidents/inc-does-not-exist/analyze")
+    assert response.status_code == 404

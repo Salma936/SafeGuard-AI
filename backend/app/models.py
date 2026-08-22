@@ -74,6 +74,8 @@ class AnalysisResult(Base):
     observed_evidence = Column(JSON, default=list)
     ai_inference = Column(JSON, default=list)
     uncertainty = Column(JSON, default=list)
+    contradictions = Column(JSON, default=list)
+    missing_evidence = Column(JSON, default=list)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     incident = relationship("Incident", back_populates="analysis_results")

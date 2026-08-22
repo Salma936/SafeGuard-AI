@@ -62,6 +62,8 @@ class InvestigationResultSchema(BaseModel):
     observed_evidence: List[str] = Field(default_factory=list)
     ai_inference: List[str] = Field(default_factory=list)
     uncertainty: List[str] = Field(default_factory=list)
+    contradictions: List[str] = Field(default_factory=list)
+    missing_evidence: List[str] = Field(default_factory=list)
 
 # Request Schemas
 class TextAnalysisRequest(BaseModel):
@@ -121,6 +123,8 @@ class IncidentResponseSchema(BaseModel):
     observed_evidence: List[str] = Field(default_factory=list)
     ai_inference: List[str] = Field(default_factory=list)
     uncertainty: List[str] = Field(default_factory=list)
+    contradictions: List[str] = Field(default_factory=list)
+    missing_evidence: List[str] = Field(default_factory=list)
     evidence_relationships: List[EvidenceRelationshipSchema] = Field(default_factory=list)
     explanation: Optional[str] = None
     explanation_simple: Optional[str] = None

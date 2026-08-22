@@ -23,7 +23,9 @@ def init_db():
         new_ar_cols = {
             "observed_evidence": "JSON",
             "ai_inference": "JSON",
-            "uncertainty": "JSON"
+            "uncertainty": "JSON",
+            "contradictions": "JSON",
+            "missing_evidence": "JSON"
         }
         
         with engine.begin() as conn:

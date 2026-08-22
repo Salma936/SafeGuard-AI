@@ -309,9 +309,11 @@ Evidence Contexts:
 
 Task:
 1. Reconstruct the step-by-step timeline of the attack (distinguish observed vs inferred vs uncertain events).
-2. Connect evidence belonging to the same incident. Define "evidence_relationships" using the source_id and target_id of the evidence items. Use the evidence IDs as they appear in the contexts (e.g. ev-XXXX).
+2. Connect evidence belonging to the same incident. Define "evidence_relationships" using the source_id and target_id of the evidence items. Use the evidence IDs as they appear in the contexts (e.g. ev-XXXX). Use relationship_type values from this set where applicable: leads_to, supports, contains_url_from, impersonates, references, escalates, contradicts, same_campaign, credential_harvesting_stage, follow_up_contact.
 3. Formulate the overall threat type, risk level, risk score, and confidence.
-4. Output a JSON object matching the requested schema.
+4. Identify any CONTRADICTIONS between evidence items — e.g. conflicting timestamps, inconsistent claims, or evidence that undermines another item's implied narrative. Populate "contradictions" as a list of short descriptions. If none are found, return an empty list — do not invent contradictions.
+5. Identify any MISSING EVIDENCE that would materially strengthen or clarify this investigation — e.g. "no screenshot of the fake login page was provided" or "the follow-up phone call was not recorded." Populate "missing_evidence" as a list. If nothing is obviously missing, return an empty list.
+6. Output a JSON object matching the requested schema, including "contradictions" and "missing_evidence" as top-level arrays.
 """
         raw_json = self._call_gemini([prompt])
         return self._parse_and_sanitize(raw_json, incident_id, fallback_threat="Other Suspicious Activity")
@@ -403,6 +405,14 @@ Task:
         if not isinstance(uncertainty, list):
             uncertainty = [str(uncertainty)] if uncertainty else []
 
+        contradictions = data.get("contradictions", [])
+        if not isinstance(contradictions, list):
+            contradictions = [str(contradictions)] if contradictions else []
+
+        missing_evidence = data.get("missing_evidence", [])
+        if not isinstance(missing_evidence, list):
+            missing_evidence = [str(missing_evidence)] if missing_evidence else []
+
         return InvestigationResultSchema(
             incident_id=data.get("incident_id", incident_id),
             risk_level=risk_level,
@@ -423,7 +433,9 @@ Task:
             origin_assessment=data.get("origin_assessment", "Likely automated scam delivery mechanism."),
             observed_evidence=observed_evidence,
             ai_inference=ai_inference,
-            uncertainty=uncertainty
+            uncertainty=uncertainty,
+            contradictions=contradictions,
+            missing_evidence=missing_evidence
         )
 
 ai_service = AIService()
