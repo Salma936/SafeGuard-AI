@@ -293,3 +293,191 @@ def test_evidence_relationships_survive_analysis(monkeypatch):
     assert data["uncertainty"] == [
         "Sender identity cannot be verified from text alone"
     ]
+
+
+def _fake_investigation_json(threat_type="Scam", risk_level="HIGH"):
+    return {
+        "incident_id": "inc-test-002",
+        "risk_level": risk_level,
+        "risk_score": 80,
+        "confidence": 75,
+        "threat_type": threat_type,
+        "summary": "Test summary.",
+        "explanation": "Test explanation.",
+        "explanation_simple": "Test simple explanation.",
+        "warning_signs": ["Test warning"],
+        "indicators": ["Test indicator"],
+        "tactics_observed": ["Test tactic"],
+        "recommended_actions": [],
+        "affected_accounts": [],
+        "timeline_events": [],
+        "evidence_relationships": [],
+        "potential_impact": "Test impact.",
+        "origin_assessment": "Test origin.",
+        "observed_evidence": ["Test observed fact"],
+        "ai_inference": ["Test inference"],
+        "uncertainty": ["Test uncertainty"],
+    }
+
+
+def test_analyze_video_success(monkeypatch):
+    """Video analysis endpoint returns a full InvestigationResultSchema when Gemini succeeds."""
+
+    def fake_call_gemini(self, contents):
+        return json.dumps(_fake_investigation_json(threat_type="Scam"))
+
+    monkeypatch.setattr(
+        "backend.app.services.ai_service.AIService._call_gemini",
+        fake_call_gemini,
+    )
+
+    # Also bypass the real Files API path entirely by monkeypatching analyze_video
+    # at the service level, since _call_gemini alone isn't reachable without a
+    # real Gemini client configured for the Files API upload/poll logic.
+    def fake_analyze_video(self, video_bytes, mime_type="video/mp4", incident_id=None):
+        from backend.app.schemas import InvestigationResultSchema
+        data = _fake_investigation_json(threat_type="Scam")
+        data["incident_id"] = incident_id or "inc-test-002"
+        return InvestigationResultSchema(**data)
+
+    monkeypatch.setattr(
+        "backend.app.services.ai_service.AIService.analyze_video",
+        fake_analyze_video,
+    )
+
+    response = client.post(
+        "/api/analyze/video",
+        files={"file": ("test.mp4", b"fake-video-bytes", "video/mp4")},
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["threat_type"] == "Scam"
+    assert data["observed_evidence"] == ["Test observed fact"]
+
+
+def test_analyze_video_missing_file():
+    """Video endpoint returns 400 when neither file nor video_b64 is provided."""
+    response = client.post("/api/analyze/video", json={})
+    assert response.status_code in (400, 422)
+
+
+def test_analyze_email_structured_payload(monkeypatch):
+    """Email analysis works with a structured JSON payload."""
+
+    def fake_analyze_email(self, email_data, incident_id=None):
+        from backend.app.schemas import InvestigationResultSchema
+        assert email_data["sender"] == "attacker@fake-bank.example"
+        data = _fake_investigation_json(threat_type="Phishing")
+        return InvestigationResultSchema(**data)
+
+    monkeypatch.setattr(
+        "backend.app.services.ai_service.AIService.analyze_email",
+        fake_analyze_email,
+    )
+
+    response = client.post(
+        "/api/analyze/email",
+        json={
+            "sender": "attacker@fake-bank.example",
+            "recipient": "victim@example.com",
+            "subject": "Urgent: Verify your account",
+            "body": "Click here to verify your account immediately.",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["threat_type"] == "Phishing"
+
+
+def test_analyze_email_eml_upload(monkeypatch):
+    """Email analysis works with a raw .eml file upload and parses sender/subject/body."""
+
+    captured = {}
+
+    def fake_analyze_email(self, email_data, incident_id=None):
+        from backend.app.schemas import InvestigationResultSchema
+        captured["email_data"] = email_data
+        data = _fake_investigation_json(threat_type="Phishing")
+        return InvestigationResultSchema(**data)
+
+    monkeypatch.setattr(
+        "backend.app.services.ai_service.AIService.analyze_email",
+        fake_analyze_email,
+    )
+
+    raw_eml = (
+        b"From: attacker@fake-bank.example\r\n"
+        b"To: victim@example.com\r\n"
+        b"Subject: Urgent: Verify your account\r\n"
+        b"Date: Mon, 1 Jan 2026 00:00:00 +0000\r\n"
+        b"Content-Type: text/plain\r\n"
+        b"\r\n"
+        b"Click here to verify your account immediately.\r\n"
+    )
+
+    response = client.post(
+        "/api/analyze/email",
+        files={"file": ("test.eml", raw_eml, "message/rfc822")},
+    )
+
+    assert response.status_code == 200, response.text
+    assert captured["email_data"]["sender"] == "attacker@fake-bank.example"
+    assert "Verify your account" in captured["email_data"]["subject"]
+
+
+def test_analyze_email_missing_input():
+    """Email endpoint returns an error when neither file nor payload is provided."""
+    response = client.post("/api/analyze/email")
+    assert response.status_code in (400, 422)
+
+
+def test_analyze_document_success(monkeypatch):
+    """Document analysis endpoint returns a full InvestigationResultSchema for a PDF upload."""
+
+    def fake_analyze_document(self, doc_bytes, mime_type="application/pdf", incident_id=None):
+        from backend.app.schemas import InvestigationResultSchema
+        assert mime_type == "application/pdf"
+        data = _fake_investigation_json(threat_type="Financial Fraud")
+        return InvestigationResultSchema(**data)
+
+    monkeypatch.setattr(
+        "backend.app.services.ai_service.AIService.analyze_document",
+        fake_analyze_document,
+    )
+
+    response = client.post(
+        "/api/analyze/document",
+        files={"file": ("invoice.pdf", b"%PDF-1.4 fake pdf bytes", "application/pdf")},
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["threat_type"] == "Financial Fraud"
+
+
+def test_analyze_document_missing_file():
+    """Document endpoint returns 400 when neither file nor doc_b64 is provided."""
+    response = client.post("/api/analyze/document", json={})
+    assert response.status_code in (400, 422)
+
+
+def test_analyze_video_gemini_failure_returns_error(monkeypatch):
+    """If video analysis raises (e.g. Gemini Files API failure), endpoint returns 500, not a fabricated success."""
+
+    def fake_analyze_video_failure(self, video_bytes, mime_type="video/mp4", incident_id=None):
+        raise ValueError("Video processing on Gemini Files API failed.")
+
+    monkeypatch.setattr(
+        "backend.app.services.ai_service.AIService.analyze_video",
+        fake_analyze_video_failure,
+    )
+
+    response = client.post(
+        "/api/analyze/video",
+        files={"file": ("test.mp4", b"fake-video-bytes", "video/mp4")},
+    )
+
+    assert response.status_code == 500
+    assert "failed" in response.json()["detail"].lower()

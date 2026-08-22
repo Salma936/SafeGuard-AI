@@ -1,13 +1,16 @@
 import time
 import base64
 # pyrefly: ignore [missing-import]
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Request
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body, Depends, Request
 from typing import Optional
 from backend.app.schemas import (
     TextAnalysisRequest, UrlAnalysisRequest,
     ImageAnalysisRequest, AudioAnalysisRequest,
-    InvestigationResultSchema
+    EmailAnalysisRequest, VideoAnalysisRequest,
+    DocumentAnalysisRequest, InvestigationResultSchema
 )
+from email import message_from_bytes
+from email.policy import default as email_default_policy
 from backend.app.services.ai_service import ai_service
 from backend.app.services.bigquery_service import bigquery_service
 
@@ -185,6 +188,194 @@ async def analyze_audio_endpoint(
             risk_level=result.risk_level,
             confidence=result.confidence,
             evidence_type="audio",
+            analysis_duration_ms=duration_ms
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=str(err))
+
+
+def _parse_eml_bytes(raw: bytes) -> dict:
+    """Parse raw .eml bytes into the structured dict analyze_email expects."""
+    msg = message_from_bytes(raw, policy=email_default_policy)
+
+    body = ""
+    if msg.is_multipart():
+        for part in msg.walk():
+            if part.get_content_type() == "text/plain":
+                body = part.get_content()
+                break
+        if not body:
+            for part in msg.walk():
+                if part.get_content_type() == "text/html":
+                    body = part.get_content()
+                    break
+    else:
+        body = msg.get_content()
+
+    attachments = [
+        part.get_filename()
+        for part in msg.walk()
+        if part.get_filename()
+    ]
+
+    return {
+        "sender": msg.get("From", ""),
+        "recipient": msg.get("To", ""),
+        "subject": msg.get("Subject", ""),
+        "timestamp": msg.get("Date", ""),
+        "headers": {k: v for k, v in msg.items()},
+        "body": body or "",
+        "attachments": attachments,
+        "urls": [],
+    }
+
+
+@router.post("/video", response_model=InvestigationResultSchema)
+async def analyze_video_endpoint(request: Request):
+    """
+    POST /api/analyze/video
+    Multimodal video evidence analysis (visual + audio) via Gemini Files API.
+    Accepts either JSON with base64 video data or a multipart file upload.
+    """
+    start_time = time.time()
+    try:
+        video_bytes = None
+        mime_type = "video/mp4"
+
+        content_type = request.headers.get("content-type", "").lower()
+
+        if "application/json" in content_type:
+            body = await request.json()
+            video_b64 = body.get("video_b64")
+            mime_type = body.get("mime_type") or "video/mp4"
+            if video_b64:
+                clean_b64 = video_b64.split(",", 1)[-1]
+                try:
+                    video_bytes = base64.b64decode(clean_b64)
+                except Exception:
+                    raise HTTPException(status_code=400, detail="Invalid video_b64 encoding.")
+
+        elif "multipart/form-data" in content_type:
+            form = await request.form()
+            uploaded_file = form.get("file")
+            if uploaded_file is not None and hasattr(uploaded_file, "read"):
+                video_bytes = await uploaded_file.read()
+                mime_type = getattr(uploaded_file, "content_type", None) or "video/mp4"
+
+        if not video_bytes:
+            raise HTTPException(status_code=400, detail="Must provide a video file upload or video_b64 string.")
+
+        result = ai_service.analyze_video(video_bytes, mime_type=mime_type)
+        duration_ms = int((time.time() - start_time) * 1000)
+        bigquery_service.log_event(
+            event_name="analysis_completed",
+            incident_id=result.incident_id,
+            threat_type=result.threat_type,
+            risk_level=result.risk_level,
+            confidence=result.confidence,
+            evidence_type="video",
+            analysis_duration_ms=duration_ms
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=str(err))
+
+
+@router.post("/email", response_model=InvestigationResultSchema)
+async def analyze_email_endpoint(request: Request):
+    """
+    POST /api/analyze/email
+    Email evidence analysis. Accepts either JSON structured email data
+    or a raw .eml multipart file upload.
+    """
+    start_time = time.time()
+    try:
+        email_data = None
+        content_type = request.headers.get("content-type", "").lower()
+
+        if "application/json" in content_type:
+            body = await request.json()
+            if not body.get("body"):
+                raise HTTPException(status_code=400, detail="Missing required 'body' field for email analysis.")
+            email_data = body
+
+        elif "multipart/form-data" in content_type:
+            form = await request.form()
+            uploaded_file = form.get("file")
+            if uploaded_file is not None and hasattr(uploaded_file, "read"):
+                raw = await uploaded_file.read()
+                email_data = _parse_eml_bytes(raw)
+
+        if not email_data:
+            raise HTTPException(status_code=400, detail="Must provide an .eml file upload or structured email JSON payload.")
+
+        result = ai_service.analyze_email(email_data)
+        duration_ms = int((time.time() - start_time) * 1000)
+        bigquery_service.log_event(
+            event_name="analysis_completed",
+            incident_id=result.incident_id,
+            threat_type=result.threat_type,
+            risk_level=result.risk_level,
+            confidence=result.confidence,
+            evidence_type="email",
+            analysis_duration_ms=duration_ms
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=str(err))
+
+
+@router.post("/document", response_model=InvestigationResultSchema)
+async def analyze_document_endpoint(request: Request):
+    """
+    POST /api/analyze/document
+    Document evidence analysis (PDF, DOCX, TXT) via Gemini native multimodal understanding.
+    Accepts either JSON with base64 document data or a multipart file upload.
+    """
+    start_time = time.time()
+    try:
+        doc_bytes = None
+        mime_type = "application/pdf"
+
+        content_type = request.headers.get("content-type", "").lower()
+
+        if "application/json" in content_type:
+            body = await request.json()
+            doc_b64 = body.get("doc_b64")
+            mime_type = body.get("mime_type") or "application/pdf"
+            if doc_b64:
+                clean_b64 = doc_b64.split(",", 1)[-1]
+                try:
+                    doc_bytes = base64.b64decode(clean_b64)
+                except Exception:
+                    raise HTTPException(status_code=400, detail="Invalid doc_b64 encoding.")
+
+        elif "multipart/form-data" in content_type:
+            form = await request.form()
+            uploaded_file = form.get("file")
+            if uploaded_file is not None and hasattr(uploaded_file, "read"):
+                doc_bytes = await uploaded_file.read()
+                mime_type = getattr(uploaded_file, "content_type", None) or "application/pdf"
+
+        if not doc_bytes:
+            raise HTTPException(status_code=400, detail="Must provide a document file upload or doc_b64 string.")
+
+        result = ai_service.analyze_document(doc_bytes, mime_type=mime_type)
+        duration_ms = int((time.time() - start_time) * 1000)
+        bigquery_service.log_event(
+            event_name="analysis_completed",
+            incident_id=result.incident_id,
+            threat_type=result.threat_type,
+            risk_level=result.risk_level,
+            confidence=result.confidence,
+            evidence_type="document",
             analysis_duration_ms=duration_ms
         )
         return result

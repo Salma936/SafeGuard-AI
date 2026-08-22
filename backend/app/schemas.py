@@ -125,6 +125,16 @@ class IncidentResponseSchema(BaseModel):
     explanation: Optional[str] = None
     explanation_simple: Optional[str] = None
 
+class VideoAnalysisRequest(BaseModel):
+    video_b64: Optional[str] = None
+    mime_type: Optional[str] = None
+
+
+class DocumentAnalysisRequest(BaseModel):
+    doc_b64: Optional[str] = None
+    mime_type: Optional[str] = None
+
+
 class EmailAnalysisRequest(BaseModel):
     sender: Optional[str] = None
     recipient: Optional[str] = None
