@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -13,10 +15,32 @@ from backend.app.routers import (
 
 
 # =========================================================
-# DATABASE INITIALIZATION
+# LIFESPAN — runs AFTER uvicorn binds to the port
 # =========================================================
 
-init_db()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/shutdown lifecycle handler.
+
+    init_db() is intentionally placed here instead of at module level.
+    Cloud Run requires the container to bind to PORT within a few seconds
+    of startup.  Running init_db() at import time blocked uvicorn from
+    binding in time, causing the revision health-check to fail.
+    """
+    print("[SafeGuard] Starting up — initialising database …")
+    try:
+        init_db()
+        print("[SafeGuard] Database ready.")
+    except Exception as exc:
+        # Log but do not crash — the app can still serve requests
+        # that don't need the DB, and /health will still respond.
+        print(f"[SafeGuard] WARNING: init_db() failed: {exc}")
+    yield
+    # Shutdown logic (if any) goes here
+    print("[SafeGuard] Shutting down.")
+
+
+
 
 
 # =========================================================
@@ -24,6 +48,7 @@ init_db()
 # =========================================================
 
 app = FastAPI(
+    lifespan=lifespan,
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description=(
@@ -105,6 +130,27 @@ app.include_router(analyze.router)
 app.include_router(incidents.router)
 app.include_router(evidence.router)
 app.include_router(analytics.router)
+
+
+# =========================================================
+# STATIC FRONTEND SERVING (Production)
+# =========================================================
+
+import os
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+if os.path.exists("dist"):
+    if os.path.exists("dist/assets"):
+        app.mount("/assets", StaticFiles(directory="dist/assets"), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        # Serve exact file if exists, otherwise fallback to SPA index.html
+        file_path = os.path.join("dist", full_path)
+        if full_path and os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse("dist/index.html")
 
 
 # =========================================================
