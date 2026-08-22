@@ -7,7 +7,7 @@ load_dotenv()
 class Settings:
     PROJECT_NAME: str = "SafeGuard AI Analysis Engine"
     VERSION: str = "2.4.0"
-    GEMINI_MODEL: str = "gemini-3.6-flash"
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
     
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./safeguard.db")
