@@ -105,6 +105,9 @@ export interface ThreatAnalysisResult {
   }>;
   potential_impact: string;
   origin_assessment: string;
+  observed_evidence: string[];
+  ai_inference: string[];
+  uncertainty: string[];
 }
 
 export interface AnalyticsSummary {
