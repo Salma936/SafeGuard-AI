@@ -1,8 +1,10 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.app.config import settings
 from backend.app.services.db_service import init_db
@@ -13,6 +15,12 @@ from backend.app.routers import (
     analytics,
 )
 
+# Eagerly initialize SQLite schema for local development and testing
+try:
+    init_db()
+except Exception as exc:
+    print(f"[SafeGuard] Initial DB bootstrap notice: {exc}")
+
 
 # =========================================================
 # LIFESPAN — runs AFTER uvicorn binds to the port
@@ -22,10 +30,8 @@ from backend.app.routers import (
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle handler.
 
-    init_db() is intentionally placed here instead of at module level.
-    Cloud Run requires the container to bind to PORT within a few seconds
-    of startup.  Running init_db() at import time blocked uvicorn from
-    binding in time, causing the revision health-check to fail.
+    init_db() is run here to ensure database tables and migrations
+    are up-to-date once the web server binds to the port.
     """
     print("[SafeGuard] Starting up — initialising database …")
     try:
@@ -38,9 +44,6 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown logic (if any) goes here
     print("[SafeGuard] Shutting down.")
-
-
-
 
 
 # =========================================================
@@ -135,10 +138,6 @@ app.include_router(analytics.router)
 # =========================================================
 # STATIC FRONTEND SERVING (Production)
 # =========================================================
-
-import os
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 
 if os.path.exists("dist"):
     if os.path.exists("dist/assets"):

@@ -1,3 +1,7 @@
 {
-  "workbench.startupEditor": "readme"
+  "workbench.startupEditor": "readme",
+  "python.defaultInterpreterPath": "/Users/salma/opt/anaconda3/bin/python3",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}"
+  ]
 }
