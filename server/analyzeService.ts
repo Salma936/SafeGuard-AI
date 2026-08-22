@@ -51,7 +51,10 @@ Respond strictly with a single JSON object matching this exact schema:
   "evidence_relationships": [],
   "timeline_events": [],
   "potential_impact": "Impact if victim complies",
-  "origin_assessment": "Assessment of origin or modus operandi"
+  "origin_assessment": "Assessment of origin or modus operandi",
+  "observed_evidence": ["Facts directly visible/present in the evidence, no speculation"],
+  "ai_inference": ["Conclusions derived from observed evidence, clearly labeled as inference"],
+  "uncertainty": ["Information that cannot be verified or is missing context"]
 }
 `;
 
@@ -138,7 +141,10 @@ function sanitizeResult(parsed: any, defaultThreat: any): ThreatAnalysisResult {
     evidence_relationships: Array.isArray(parsed.evidence_relationships) ? parsed.evidence_relationships : [],
     timeline_events: timeline,
     potential_impact: parsed.potential_impact || 'Risk of credential compromise or fraudulent activity.',
-    origin_assessment: parsed.origin_assessment || 'Likely automated scam delivery mechanism.'
+    origin_assessment: parsed.origin_assessment || 'Likely automated scam delivery mechanism.',
+    observed_evidence: Array.isArray(parsed.observed_evidence) ? parsed.observed_evidence : [],
+    ai_inference: Array.isArray(parsed.ai_inference) ? parsed.ai_inference : [],
+    uncertainty: Array.isArray(parsed.uncertainty) ? parsed.uncertainty : []
   };
 }
 
