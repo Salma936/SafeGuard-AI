@@ -1,4 +1,18 @@
-export type ViewMode = 'landing' | 'investigate' | 'live-demo';
+export type ViewMode = 'landing' | 'investigate' | 'live-demo' | 'screenshot-analyzer';
+
+export interface ForensicsFinding {
+  label: string;
+  detail: string;
+  severity: 'high' | 'medium' | 'info' | string;
+}
+
+export interface ForensicsAnalysisResult {
+  manipulation_score: number;
+  verdict: string;
+  findings: ForensicsFinding[];
+  ela_heatmap_base64?: string | null;
+  noise_heatmap_base64?: string | null;
+}
 
 export interface EvidenceItem {
   id: string;

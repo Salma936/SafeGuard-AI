@@ -1,5 +1,12 @@
 import os
+import sys
+from pathlib import Path
 from contextlib import asynccontextmanager
+
+# Ensure project root is in sys.path when executed directly as a script
+project_root = str(Path(__file__).resolve().parent.parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +20,7 @@ from backend.app.routers import (
     incidents,
     evidence,
     analytics,
+    screenshot_router,
 )
 
 # =========================================================
@@ -126,6 +134,7 @@ app.include_router(analyze.router)
 app.include_router(incidents.router)
 app.include_router(evidence.router)
 app.include_router(analytics.router)
+app.include_router(screenshot_router.router, prefix="/api")
 
 
 # =========================================================

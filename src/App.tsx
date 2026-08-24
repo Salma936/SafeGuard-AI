@@ -16,6 +16,7 @@ import { TrustPrivacySection } from './components/TrustPrivacySection';
 import { Footer } from './components/Footer';
 import { InfoModals } from './components/InfoModals';
 import { InvestigationWorkspace } from './components/InvestigationWorkspace';
+import ScreenshotAnalyzer from './components/ScreenshotAnalyzer';
 
 export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('landing');
@@ -99,6 +100,17 @@ export default function App() {
               onScrollToSection={handleScrollToSection}
               onOpenModal={(modal) => setActiveModal(modal)}
             />
+          </motion.div>
+        ) : viewMode === 'screenshot-analyzer' ? (
+          <motion.div
+            key="screenshot-analyzer"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            className="flex-1"
+          >
+            <ScreenshotAnalyzer onNavigate={handleNavigate} />
           </motion.div>
         ) : (
           <motion.div
