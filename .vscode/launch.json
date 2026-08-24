@@ -2,10 +2,35 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "npm install && npm run dev",
-      "type": "node-terminal",
+      "name": "Backend: FastAPI (uvicorn)",
+      "type": "python",
       "request": "launch",
-      "command": "npm install && npm run dev"
+      "module": "uvicorn",
+      "args": [
+        "backend.app.main:app",
+        "--reload",
+        "--port",
+        "8000"
+      ],
+      "cwd": "${workspaceFolder}",
+      "env": {},
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Backend: pytest",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "tests/",
+        "-v"
+      ],
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false
     }
   ]
 }

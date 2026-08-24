@@ -625,3 +625,26 @@ def test_incident_correlation_not_found():
     """Correlation on a nonexistent incident returns 404."""
     response = client.post("/api/incidents/inc-does-not-exist/analyze")
     assert response.status_code == 404
+
+
+def test_analyze_screenshot_endpoint():
+    """Verify multipart screenshot analysis returns score, verdict, findings and heatmaps."""
+    import io
+    from PIL import Image
+
+    img = Image.new("RGB", (200, 200), color=(73, 109, 137))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    response = client.post(
+        "/api/analyze-screenshot",
+        files={"file": ("screenshot.png", buf, "image/png")}
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert "manipulation_score" in data
+    assert "verdict" in data
+    assert "findings" in data
+    assert isinstance(data["findings"], list)
+    assert data["ela_heatmap_base64"] is not None

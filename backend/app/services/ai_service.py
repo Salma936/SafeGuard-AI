@@ -84,7 +84,7 @@ class AIService:
         self.client = None
         if GENAI_SDK_AVAILABLE and self.api_key:
             try:
-                self.client = genai.Client(api_key=self.api_key)
+                self.client = genai.Client(api_key=self.api_key, vertexai=False)
             except Exception as e:
                 print(f"[AIService] Warning: Failed to create Gemini client: {e}")
 

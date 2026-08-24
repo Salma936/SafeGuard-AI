@@ -17,6 +17,7 @@ import { Footer } from './components/Footer';
 import { InfoModals } from './components/InfoModals';
 import { InvestigationWorkspace } from './components/InvestigationWorkspace';
 import ScreenshotAnalyzer from './components/ScreenshotAnalyzer';
+import { AnimatedPage } from './components/AnimatedPage';
 
 export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('landing');
@@ -55,14 +56,7 @@ export default function App() {
     <div className="min-h-screen bg-[#090D14] text-slate-100 flex flex-col font-sans selection:bg-emerald-500/20 selection:text-emerald-300">
       <AnimatePresence mode="wait">
         {viewMode === 'landing' ? (
-          <motion.div
-            key="landing"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="flex-1 flex flex-col"
-          >
+          <AnimatedPage key="landing">
             <Header
               currentView={viewMode}
               onNavigate={handleNavigate}
@@ -100,33 +94,19 @@ export default function App() {
               onScrollToSection={handleScrollToSection}
               onOpenModal={(modal) => setActiveModal(modal)}
             />
-          </motion.div>
+          </AnimatedPage>
         ) : viewMode === 'screenshot-analyzer' ? (
-          <motion.div
-            key="screenshot-analyzer"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="flex-1"
-          >
+          <AnimatedPage key="screenshot-analyzer">
             <ScreenshotAnalyzer onNavigate={handleNavigate} />
-          </motion.div>
+          </AnimatedPage>
         ) : (
-          <motion.div
-            key="workspace"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="flex-1"
-          >
+          <AnimatedPage key="workspace">
             <InvestigationWorkspace
               initialMode={viewMode}
               onNavigate={handleNavigate}
               selectedDemoCase={selectedDemoCase}
             />
-          </motion.div>
+          </AnimatedPage>
         )}
       </AnimatePresence>
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft,
   Layers,
@@ -25,10 +26,13 @@ import {
   analyzeSuspiciousAudio,
   addIncidentEvidence
 } from '../services/api';
+import { LiveStatusIndicator } from './LiveStatusIndicator';
+import { EvidenceCardSkeleton, TimelineItemSkeleton, ActionItemSkeleton } from './SkeletonLoader';
+
 
 
 interface InvestigationWorkspaceProps {
-  initialMode: 'investigate' | 'live-demo';
+  initialMode: ViewMode;
   onNavigate: (view: ViewMode) => void;
   selectedDemoCase?: IncidentCase | null;
 }
@@ -110,7 +114,7 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
   );
   const [activeTab, setActiveTab] = useState<'evidence' | 'timeline' | 'actions' | 'export'>('evidence');
   const [viewDetailMode, setViewDetailMode] = useState<'simple' | 'technical'>('simple');
-  
+
   // Custom evidence & real AI submission state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [suspiciousMessageInput, setSuspiciousMessageInput] = useState('');
@@ -144,10 +148,10 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
       result.risk_level === 'CRITICAL'
         ? 'Critical'
         : result.risk_level === 'HIGH'
-        ? 'High'
-        : result.risk_level === 'MEDIUM'
-        ? 'Medium'
-        : 'Low';
+          ? 'High'
+          : result.risk_level === 'MEDIUM'
+            ? 'Medium'
+            : 'Low';
 
     const newEv: EvidenceItem = {
       id: `ev-ai-${Date.now()}`,
@@ -177,26 +181,26 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
 
     const newActions: ActionItem[] = result.recommended_actions && result.recommended_actions.length > 0
       ? result.recommended_actions.map((act, idx) => ({
-          id: `act-ai-${Date.now()}-${idx}`,
-          category: act.category || 'Immediate Containment',
-          title: act.title,
-          description: act.description,
-          priority: act.priority || 'high',
-          isCompleted: false,
-          actionType: act.actionTarget ? 'external_link' : 'guide',
-          actionTarget: act.actionTarget
-        }))
+        id: `act-ai-${Date.now()}-${idx}`,
+        category: act.category || 'Immediate Containment',
+        title: act.title,
+        description: act.description,
+        priority: act.priority || 'high',
+        isCompleted: false,
+        actionType: act.actionTarget ? 'external_link' : 'guide',
+        actionTarget: act.actionTarget
+      }))
       : [
-          {
-            id: `act-ai-${Date.now()}-0`,
-            category: 'Immediate Containment',
-            title: 'Do not click links or provide credentials',
-            description: 'Cease communication with the sender immediately.',
-            priority: 'urgent',
-            isCompleted: false,
-            actionType: 'guide'
-          }
-        ];
+        {
+          id: `act-ai-${Date.now()}-0`,
+          category: 'Immediate Containment',
+          title: 'Do not click links or provide credentials',
+          description: 'Cease communication with the sender immediately.',
+          priority: 'urgent',
+          isCompleted: false,
+          actionType: 'guide'
+        }
+      ];
 
     setActiveCase((prev) => ({
       ...prev,
@@ -338,70 +342,119 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
               <button
                 id="workspace-back-to-landing-btn"
                 onClick={() => onNavigate('landing')}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full transition-colors border border-slate-700"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full transition-colors border border-slate-700 cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Home</span>
               </button>
 
-              <div className="h-4 w-px bg-slate-800 hidden sm:block"></div>
+              <div className="h-4 w-px bg-slate-800 hidden sm:block" />
 
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono text-slate-500 font-bold uppercase">CASE:</span>
-                <span className="text-xs font-bold text-white truncate max-w-[180px] sm:max-w-xs md:max-w-md">
+                <span className="text-xs font-bold text-white truncate max-w-[140px] sm:max-w-xs md:max-w-md">
                   {activeCase.title}
                 </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 font-bold border border-red-500/20">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 font-bold border border-red-500/20 hidden md:inline">
                   {activeCase.overallRisk} RISK ({activeCase.riskScore}/100)
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5">
-              <button
+            {/* Sticky Top Action Bar: Add Evidence & Analyse directly visible above the fold */}
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              <motion.button
+                id="workspace-top-add-evidence-btn"
+                whileHover={{ scale: 1.04, boxShadow: '0 0 16px rgba(16,185,129,0.25)' }}
+                whileTap={{ scale: 0.96 }}
                 onClick={() => setShowAddEvidenceModal(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-950 bg-emerald-500 hover:bg-emerald-400 rounded-full shadow-xs transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-bold text-slate-950 bg-emerald-500 hover:bg-emerald-400 rounded-full shadow-xs transition-colors cursor-pointer"
               >
                 <PlusCircle className="w-3.5 h-3.5" />
                 <span>Add Evidence</span>
-              </button>
+              </motion.button>
 
-              <button
+              <motion.button
+                id="workspace-top-analyse-btn"
+                whileHover={{ scale: 1.04, boxShadow: '0 0 16px rgba(52,211,153,0.3)' }}
+                whileTap={{ scale: 0.96 }}
+                onClick={(e) => {
+                  if (suspiciousMessageInput.trim()) {
+                    handleAnalyzeTextMessage(e);
+                  } else {
+                    setActiveTab('evidence');
+                    setTimeout(() => {
+                      document.getElementById('ai-analyzer-textarea')?.focus();
+                    }, 50);
+                  }
+                }}
+                disabled={isAnalyzing}
+                className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-bold text-slate-100 bg-slate-900 hover:bg-slate-800 border border-emerald-500/40 hover:border-emerald-400 rounded-full shadow-xs transition-colors cursor-pointer"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                    <span>Analyzing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Analyse</span>
+                  </>
+                )}
+              </motion.button>
+
+              <motion.button
+                id="btn-open-screenshot-analyzer"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => onNavigate('screenshot-analyzer')}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 rounded-full transition-colors border border-slate-800 cursor-pointer"
+                title="Deep ELA & Image Manipulation Forensics"
+              >
+                <FileCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden md:inline">Image Forensics</span>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={handleExportReport}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 rounded-full transition-colors border border-slate-800"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 rounded-full transition-colors border border-slate-800 cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden sm:inline">Export</span>
-              </button>
+                <span className="hidden md:inline">Export</span>
+              </motion.button>
             </div>
           </div>
         </div>
+
 
         {/* 5-Step Lifecycle Progression Indicator Banner */}
         <div className="bg-[#070A0F] text-slate-400 py-2.5 px-6 overflow-x-auto border-t border-slate-800/80">
           <div className="max-w-7xl mx-auto flex items-center justify-between text-xs font-mono tracking-wider min-w-[650px]">
             <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <LiveStatusIndicator size="sm" status="active" />
               <span>01 DETECT</span>
             </div>
             <span className="text-slate-600">&rarr;</span>
             <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
               <span>02 CORRELATE</span>
             </div>
             <span className="text-slate-600">&rarr;</span>
             <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
               <span>03 PROTECT</span>
             </div>
             <span className="text-slate-600">&rarr;</span>
             <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
               <span>04 PRESERVE</span>
             </div>
             <span className="text-slate-600">&rarr;</span>
             <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
               <span>05 RECOVER</span>
             </div>
           </div>
@@ -411,44 +464,67 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
       {/* Main Workspace Container */}
       <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 pt-8">
         {/* Real-time AI Analysis Success Toast */}
-        {analysisSuccess && (
-          <div className="mb-6 p-4 rounded-2xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs sm:text-sm font-medium flex items-center justify-between gap-3 shadow-lg shadow-emerald-950/40 animate-fadeIn">
-            <div className="flex items-center gap-2.5">
-              <Sparkles className="w-5 h-5 text-emerald-400 shrink-0" />
-              <span>{analysisSuccess}</span>
-            </div>
-            <button
-              onClick={() => setAnalysisSuccess(null)}
-              className="text-emerald-400/80 hover:text-emerald-300 text-xs font-mono font-bold"
+        <AnimatePresence>
+          {analysisSuccess && (
+            <motion.div
+              initial={{ opacity: 0, y: -12, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              className="mb-6 p-4 rounded-2xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs sm:text-sm font-medium flex items-center justify-between gap-3 shadow-lg shadow-emerald-950/40"
             >
-              Dismiss
-            </button>
-          </div>
-        )}
+              <div className="flex items-center gap-2.5">
+                <Sparkles className="w-5 h-5 text-emerald-400 shrink-0" />
+                <span>{analysisSuccess}</span>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                onClick={() => setAnalysisSuccess(null)}
+                className="text-emerald-400/80 hover:text-emerald-300 text-xs font-mono font-bold cursor-pointer"
+              >
+                Dismiss
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Real-time AI Analysis Error Toast */}
-        {analysisError && (
-          <div className="mb-6 p-4 rounded-2xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs sm:text-sm font-medium flex items-center justify-between gap-3 shadow-lg shadow-rose-950/40 animate-fadeIn">
-            <div className="flex items-center gap-2.5">
-              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
-              <span>{analysisError}</span>
-            </div>
-            <button
-              onClick={() => setAnalysisError(null)}
-              className="text-rose-400/80 hover:text-rose-300 text-xs font-mono font-bold"
+        <AnimatePresence>
+          {analysisError && (
+            <motion.div
+              initial={{ opacity: 0, y: -12, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              className="mb-6 p-4 rounded-2xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs sm:text-sm font-medium flex items-center justify-between gap-3 shadow-lg shadow-rose-950/40"
             >
-              Dismiss
-            </button>
-          </div>
-        )}
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+                <span>{analysisError}</span>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                onClick={() => setAnalysisError(null)}
+                className="text-rose-400/80 hover:text-rose-300 text-xs font-mono font-bold cursor-pointer"
+              >
+                Dismiss
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Export Success Toast */}
-        {exportSuccessMessage && (
-          <div className="mb-6 p-4 rounded-2xl bg-emerald-950/50 border border-emerald-500/30 text-emerald-300 text-xs sm:text-sm font-medium flex items-center gap-2 shadow-xs animate-fadeIn">
-            <FileCheck className="w-5 h-5 text-emerald-400 shrink-0" />
-            <span>{exportSuccessMessage}</span>
-          </div>
-        )}
+        <AnimatePresence>
+          {exportSuccessMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -12, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              className="mb-6 p-4 rounded-2xl bg-emerald-950/50 border border-emerald-500/30 text-emerald-300 text-xs sm:text-sm font-medium flex items-center gap-2 shadow-xs"
+            >
+              <FileCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+              <span>{exportSuccessMessage}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Scenario Quick Selector & View Mode Toggle */}
         <div className="mb-6 bg-slate-900/60 p-4 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-xs">
@@ -456,21 +532,22 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
             <span className="text-xs font-mono uppercase text-slate-400">Preset Scenarios:</span>
             <div className="flex flex-wrap gap-2">
               {DEMO_INCIDENTS.map((demo) => (
-                <button
+                <motion.button
                   key={demo.id}
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
                   onClick={() => {
                     setActiveCase(demo);
                     setAnalysisSuccess(null);
                     setAnalysisError(null);
                   }}
-                  className={`px-3 py-1.5 text-xs rounded-full transition-all ${
-                    activeCase.id === demo.id
-                      ? 'bg-emerald-500 text-slate-950 font-bold shadow-xs'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700 font-semibold border border-slate-700'
-                  }`}
+                  className={`px-3.5 py-1.5 text-xs rounded-full transition-all cursor-pointer ${activeCase.id === demo.id
+                    ? 'bg-emerald-500 text-slate-950 font-bold shadow-xs'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700 font-semibold border border-slate-700'
+                    }`}
                 >
                   {demo.category}
-                </button>
+                </motion.button>
               ))}
             </div>
           </div>
@@ -478,35 +555,37 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
           {/* Simple View / Technical View Toggle */}
           <div className="flex items-center gap-3">
             <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
-              <button
+              <motion.button
                 id="view-mode-simple-btn"
+                whileTap={{ scale: 0.95 }}
                 onClick={() => setViewDetailMode('simple')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                  viewDetailMode === 'simple'
-                    ? 'bg-emerald-500 text-slate-950 shadow-xs'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${viewDetailMode === 'simple'
+                  ? 'bg-emerald-500 text-slate-950 shadow-xs'
+                  : 'text-slate-400 hover:text-white'
+                  }`}
               >
                 Simple View
-              </button>
-              <button
+              </motion.button>
+              <motion.button
                 id="view-mode-technical-btn"
+                whileTap={{ scale: 0.95 }}
                 onClick={() => setViewDetailMode('technical')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                  viewDetailMode === 'technical'
-                    ? 'bg-slate-800 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${viewDetailMode === 'technical'
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white'
+                  }`}
               >
                 Technical View
-              </button>
+              </motion.button>
             </div>
 
-            <span className="text-xs text-slate-400 font-mono hidden sm:inline">
-              Status: <span className="text-emerald-400 font-bold">{activeCase.status}</span> &bull; {activeCase.dateReported}
-            </span>
+            <div className="text-xs text-slate-400 font-mono hidden sm:flex items-center gap-1.5">
+              <LiveStatusIndicator size="sm" status="active" />
+              <span>Status: <span className="text-emerald-400 font-bold">{activeCase.status}</span> &bull; {activeCase.dateReported}</span>
+            </div>
           </div>
         </div>
+
 
         {/* Workspace Layout Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -514,65 +593,105 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
           <div className="lg:col-span-8 space-y-6">
             {/* Tab navigation */}
             <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => setActiveTab('evidence')}
-                className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-colors flex items-center gap-2 ${
-                  activeTab === 'evidence'
-                    ? 'bg-slate-800 text-white shadow-xs border border-slate-700'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
-                }`}
+                className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-colors flex items-center gap-2 cursor-pointer ${activeTab === 'evidence'
+                  ? 'bg-slate-800 text-white shadow-xs border border-slate-700'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
+                  }`}
               >
                 <Layers className="w-4 h-4 text-emerald-400" />
                 <span>Evidence Artifacts ({activeCase.evidence.length})</span>
-              </button>
+              </motion.button>
 
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => setActiveTab('timeline')}
-                className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-colors flex items-center gap-2 ${
-                  activeTab === 'timeline'
-                    ? 'bg-slate-800 text-white shadow-xs border border-slate-700'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
-                }`}
+                className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-colors flex items-center gap-2 cursor-pointer ${activeTab === 'timeline'
+                  ? 'bg-slate-800 text-white shadow-xs border border-slate-700'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
+                  }`}
               >
                 <Clock className="w-4 h-4 text-emerald-400" />
                 <span>Timeline ({activeCase.timeline.length})</span>
-              </button>
+              </motion.button>
 
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => setActiveTab('actions')}
-                className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-colors flex items-center gap-2 ${
-                  activeTab === 'actions'
-                    ? 'bg-slate-800 text-white shadow-xs border border-slate-700'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
-                }`}
+                className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-colors flex items-center gap-2 cursor-pointer ${activeTab === 'actions'
+                  ? 'bg-slate-800 text-white shadow-xs border border-slate-700'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
+                  }`}
               >
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 <span>Action Checklist ({activeCase.actionPlan.filter(a => a.isCompleted).length}/{activeCase.actionPlan.length})</span>
-              </button>
+              </motion.button>
             </div>
 
             {/* TAB: Evidence Artifacts */}
             {activeTab === 'evidence' && (
               <div className="space-y-4">
-                {/* AI Suspicious Message Analyzer Input Box */}
-                <div className="bg-slate-900/90 rounded-2xl p-5 border border-emerald-500/30 shadow-lg shadow-black/40 space-y-3.5">
-                  <div className="flex items-center justify-between">
+                {/* AI Suspicious Message Analyzer Input Box with Top Action Bar */}
+                <div className="bg-slate-900/90 rounded-3xl p-5 border border-emerald-500/30 shadow-lg shadow-black/40 space-y-4">
+                  {/* Top Action Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
                         <Sparkles className="w-4 h-4" />
                       </div>
                       <div>
-                        <h4 className="text-sm font-bold text-white">AI Suspicious Message Analyzer</h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-white">AI Suspicious Message Analyzer</h4>
+                          <LiveStatusIndicator size="sm" status="active" label="Live Gemini 3.6 Flash" />
+                        </div>
                         <p className="text-xs text-slate-400">Paste any suspicious message to extract risk indicators and response steps.</p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 hidden sm:inline">
-                      Live Gemini 3.6 Flash
-                    </span>
+
+                    <div className="flex items-center gap-2">
+                      <motion.button
+                        type="button"
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => setShowAddEvidenceModal(true)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors cursor-pointer"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Add Evidence</span>
+                      </motion.button>
+
+                      <motion.button
+                        type="button"
+                        id="btn-analyze-suspicious-message-top"
+                        whileHover={{ scale: 1.03, boxShadow: '0 0 20px rgba(16,185,129,0.35)' }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={handleAnalyzeTextMessage}
+                        disabled={isAnalyzing || !suspiciousMessageInput.trim()}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-950 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-md cursor-pointer"
+                      >
+                        {isAnalyzing ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Analyzing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Analyse</span>
+                          </>
+                        )}
+                      </motion.button>
+                    </div>
                   </div>
 
                   <form onSubmit={handleAnalyzeTextMessage} className="space-y-3">
                     <textarea
+                      id="ai-analyzer-textarea"
                       rows={3}
                       value={suspiciousMessageInput}
                       onChange={(e) => {
@@ -580,7 +699,7 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
                         if (analysisError) setAnalysisError(null);
                       }}
                       placeholder="Paste suspicious message here (e.g. 'URGENT: Your account was compromised. Click https://... to verify now')..."
-                      className="w-full px-3.5 py-2.5 text-xs bg-slate-950 border border-slate-800 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 font-sans text-white placeholder-slate-500 resize-y"
+                      className="w-full px-3.5 py-2.5 text-xs bg-slate-950 border border-slate-800 rounded-2xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 font-sans text-white placeholder-slate-500 resize-y"
                       disabled={isAnalyzing}
                     />
 
@@ -588,138 +707,169 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="text-[10px] font-mono uppercase text-slate-500 mr-1">Quick Samples:</span>
-                        <button
+                        <motion.button
                           type="button"
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
                           onClick={() => setSuspiciousMessageInput('URGENT: Your Netflix account has been suspended due to billing error. Update immediately at https://netflix-billing-update.me/auth or access will be permanently deleted in 2 hours.')}
-                          className="px-2.5 py-1 text-[11px] font-mono rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition-colors"
+                          className="px-2.5 py-1 text-[11px] font-mono rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer"
                         >
                           Netflix Phish
-                        </button>
-                        <button
+                        </motion.button>
+                        <motion.button
                           type="button"
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
                           onClick={() => setSuspiciousMessageInput('Bank Alert: Unrecognized $1,420.00 wire transfer from your Chase Checking. If not you, confirm via https://chase-fraud-prevention.online/resolve immediately.')}
-                          className="px-2.5 py-1 text-[11px] font-mono rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition-colors"
+                          className="px-2.5 py-1 text-[11px] font-mono rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer"
                         >
                           Bank Smish
-                        </button>
-                        <button
+                        </motion.button>
+                        <motion.button
                           type="button"
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
                           onClick={() => setSuspiciousMessageInput('I have recorded video of you from your webcam. If you do not send $800 in Bitcoin to bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh within 24 hours, I will distribute this to all your contacts.')}
-                          className="px-2.5 py-1 text-[11px] font-mono rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition-colors"
+                          className="px-2.5 py-1 text-[11px] font-mono rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer"
                         >
                           Extortion Bluff
-                        </button>
+                        </motion.button>
                       </div>
 
                       <div className="flex items-center gap-2">
                         {suspiciousMessageInput && (
-                          <button
+                          <motion.button
                             type="button"
+                            whileHover={{ scale: 1.05 }}
                             onClick={() => setSuspiciousMessageInput('')}
-                            className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
+                            className="px-3 py-1.5 text-xs text-slate-400 hover:text-white cursor-pointer"
                           >
                             Clear
-                          </button>
+                          </motion.button>
                         )}
-                        <button
+                        <motion.button
                           type="submit"
                           id="btn-analyze-suspicious-message"
+                          whileHover={{ scale: 1.03, boxShadow: '0 0 20px rgba(16,185,129,0.35)' }}
+                          whileTap={{ scale: 0.97 }}
                           disabled={isAnalyzing || !suspiciousMessageInput.trim()}
-                          className="px-5 py-2 text-xs font-bold text-slate-950 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-md flex items-center gap-1.5"
+                          className="px-5 py-2 text-xs font-bold text-slate-950 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
                         >
                           {isAnalyzing ? (
                             <>
                               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              <span>Analyzing with AI...</span>
+                              <span>Analyzing...</span>
                             </>
                           ) : (
                             <>
                               <Sparkles className="w-3.5 h-3.5" />
-                              <span>Analyze Message</span>
+                              <span>Analyse</span>
                             </>
                           )}
-                        </button>
+                        </motion.button>
                       </div>
                     </div>
                   </form>
                 </div>
 
+
+                {/* Evidence Loading Skeleton */}
+                {isAnalyzing && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="space-y-4"
+                  >
+                    <EvidenceCardSkeleton />
+                    <EvidenceCardSkeleton />
+                  </motion.div>
+                )}
+
                 <div className="flex items-center justify-between pt-2">
                   <h3 className="text-base font-bold text-white">Ingested Digital Evidence</h3>
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={() => setShowAddEvidenceModal(true)}
-                    className="text-xs text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-slate-950 bg-emerald-500 hover:bg-emerald-400 rounded-xl shadow-xs transition-colors cursor-pointer"
                   >
                     <PlusCircle className="w-3.5 h-3.5" />
-                    <span>Add Evidence Modal</span>
-                  </button>
+                    <span>Add Evidence</span>
+                  </motion.button>
                 </div>
 
-                {activeCase.evidence.map((ev) => (
-                  <div
-                    key={ev.id}
-                    className="bg-slate-900/70 rounded-2xl p-5 border border-slate-800 shadow-xs space-y-3"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-lg bg-slate-950 text-emerald-400 flex items-center justify-center border border-slate-800">
-                          {ev.type === 'message' && <FileText className="w-4 h-4" />}
-                          {ev.type === 'url' && <LinkIcon className="w-4 h-4" />}
-                          {ev.type === 'screenshot' && <Upload className="w-4 h-4" />}
-                          {ev.type === 'email' && <FileText className="w-4 h-4" />}
-                        </div>
-                        <div>
-                          <div className="font-bold text-sm text-white">{ev.title}</div>
-                          <div className="text-[11px] text-slate-400 font-mono">
-                            Type: {ev.type.toUpperCase()} &bull; Ingested at {ev.timestamp} {ev.source ? `from ${ev.source}` : ''}
+                <AnimatePresence>
+                  {activeCase.evidence.map((ev, idx) => (
+                    <motion.div
+                      key={ev.id}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      whileHover={{ y: -2, borderColor: 'rgba(16,185,129,0.3)' }}
+                      className="bg-slate-900/70 rounded-3xl p-5 border border-slate-800 shadow-xs space-y-3 transition-colors"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-slate-950 text-emerald-400 flex items-center justify-center border border-slate-800">
+                            {ev.type === 'message' && <FileText className="w-4 h-4" />}
+                            {ev.type === 'url' && <LinkIcon className="w-4 h-4" />}
+                            {ev.type === 'screenshot' && <Upload className="w-4 h-4" />}
+                            {ev.type === 'email' && <FileText className="w-4 h-4" />}
+                          </div>
+                          <div>
+                            <div className="font-bold text-sm text-white">{ev.title}</div>
+                            <div className="text-[11px] text-slate-400 font-mono">
+                              Type: {ev.type.toUpperCase()} &bull; Ingested at {ev.timestamp} {ev.source ? `from ${ev.source}` : ''}
+                            </div>
                           </div>
                         </div>
+
+                        <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 font-mono">
+                          {ev.riskLevel} Risk ({ev.riskScore}/100)
+                        </span>
                       </div>
 
-                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 font-mono">
-                        {ev.riskLevel} Risk ({ev.riskScore}/100)
-                      </span>
-                    </div>
-
-                    <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 font-mono text-xs text-slate-200 break-all leading-relaxed whitespace-pre-line">
-                      {ev.content}
-                    </div>
-
-                    {ev.metadata && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                        {Object.entries(ev.metadata).map(([key, val]) => (
-                          <div key={key} className="p-2 bg-slate-950/70 rounded-lg text-[11px] font-mono border border-slate-800">
-                            <span className="text-slate-500">{key}:</span> <span className="text-slate-300 font-semibold">{val}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="pt-2 border-t border-slate-800 space-y-2">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-[11px] font-mono text-slate-400 mr-1">Observed Indicators:</span>
-                        {ev.indicators.map((ind, idx) => (
-                          <span
-                            key={idx}
-                            className="text-[11px] font-medium bg-red-500/10 text-red-400 px-2 py-0.5 rounded-md border border-red-500/20"
-                          >
-                            {ind}
-                          </span>
-                        ))}
+                      <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 font-mono text-xs text-slate-200 break-all leading-relaxed whitespace-pre-line">
+                        {ev.content}
                       </div>
 
-                      {/* Plain-language explanation for Simple View */}
-                      {viewDetailMode === 'simple' && (
-                        <p className="text-xs text-slate-300 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80 leading-relaxed">
-                          <span className="text-emerald-400 font-semibold mr-1.5">What this means:</span>
-                          {ev.indicators.length > 0
-                            ? getIndicatorPlainLanguage(ev.indicators[0])
-                            : "Suspicious indicators detected for this evidence item."}
-                        </p>
+                      {ev.metadata && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          {Object.entries(ev.metadata).map(([key, val]) => (
+                            <div key={key} className="p-2 bg-slate-950/70 rounded-xl text-[11px] font-mono border border-slate-800">
+                              <span className="text-slate-500">{key}:</span> <span className="text-slate-300 font-semibold">{val}</span>
+                            </div>
+                          ))}
+                        </div>
                       )}
-                    </div>
-                  </div>
-                ))}
+
+                      <div className="pt-2 border-t border-slate-800 space-y-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[11px] font-mono text-slate-400 mr-1">Observed Indicators:</span>
+                          {ev.indicators.map((ind, i) => (
+                            <span
+                              key={i}
+                              className="text-[11px] font-medium bg-red-500/10 text-red-400 px-2 py-0.5 rounded-md border border-red-500/20"
+                            >
+                              {ind}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Plain-language explanation for Simple View */}
+                        {viewDetailMode === 'simple' && (
+                          <p className="text-xs text-slate-300 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80 leading-relaxed">
+                            <span className="text-emerald-400 font-semibold mr-1.5">What this means:</span>
+                            {ev.indicators.length > 0
+                              ? getIndicatorPlainLanguage(ev.indicators[0])
+                              : "Suspicious indicators detected for this evidence item."}
+                          </p>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </div>
             )}
 
@@ -731,23 +881,29 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
                   <span className="text-xs text-slate-400 font-mono">Automated Correlation</span>
                 </div>
 
-                <div className="bg-slate-900/70 rounded-2xl p-6 border border-slate-800 shadow-xs space-y-6">
-                  {activeCase.timeline.map((event) => (
-                    <div key={event.id} className="relative pl-6 pb-6 border-l-2 border-emerald-500/40 last:border-l-0 last:pb-0">
-                      <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-emerald-500 border-2 border-slate-900 shadow-xs"></div>
-                      
+                <div className="bg-slate-900/70 rounded-3xl p-6 border border-slate-800 shadow-xs space-y-6">
+                  {activeCase.timeline.map((event, idx) => (
+                    <motion.div
+                      key={event.id}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.06 }}
+                      className="relative pl-6 pb-6 border-l-2 border-emerald-500/40 last:border-l-0 last:pb-0"
+                    >
+                      <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-emerald-500 border-2 border-slate-900 shadow-xs" />
+
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                        <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
                           {event.timestamp}
                         </span>
-                        <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                        <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700">
                           Phase: {event.phase}
                         </span>
                       </div>
 
                       <h4 className="text-sm font-bold text-white mt-1">{event.title}</h4>
                       <p className="text-xs text-slate-400 mt-1 leading-relaxed">{event.description}</p>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
               </div>
@@ -764,31 +920,33 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                  {activeCase.actionPlan.map((act) => (
-                    <div
+                  {activeCase.actionPlan.map((act, idx) => (
+                    <motion.div
                       key={act.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      whileHover={{ x: 3 }}
                       onClick={() => handleToggleAction(act.id)}
-                      className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-3.5 ${
-                        act.isCompleted
-                          ? 'bg-emerald-950/20 border-emerald-500/30'
-                          : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 shadow-xs'
-                      }`}
+                      className={`p-4 rounded-3xl border transition-all cursor-pointer flex items-start gap-3.5 ${act.isCompleted
+                        ? 'bg-emerald-950/20 border-emerald-500/30'
+                        : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 shadow-xs'
+                        }`}
                     >
                       <input
                         type="checkbox"
                         checked={act.isCompleted}
-                        onChange={() => {}}
-                        className="w-4 h-4 rounded mt-1 text-emerald-500 focus:ring-emerald-400 cursor-pointer accent-emerald-500"
+                        onChange={() => { }}
+                        className="w-4 h-4 rounded-md mt-1 text-emerald-500 focus:ring-emerald-400 cursor-pointer accent-emerald-500"
                       />
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <span className={`text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
-                            act.priority === 'urgent'
-                              ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                              : act.priority === 'high'
+                          <span className={`text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${act.priority === 'urgent'
+                            ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            : act.priority === 'high'
                               ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                               : 'bg-slate-800 text-slate-400 border border-slate-700'
-                          }`}>
+                            }`}>
                             {act.priority}
                           </span>
                           <span className="text-xs text-slate-400 font-mono">{act.category}</span>
@@ -812,12 +970,13 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
                           </a>
                         )}
                       </div>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
               </div>
             )}
           </div>
+
 
           {/* Right Column: AI Triage Synthesis & Forensic Summary */}
           <div className="lg:col-span-4 space-y-6">
@@ -838,8 +997,8 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
                         {activeCase.riskScore >= 75
                           ? 'Overall, this looks very risky'
                           : activeCase.riskScore >= 50
-                          ? 'Overall, this looks moderately suspicious'
-                          : 'Overall, this appears low risk'}
+                            ? 'Overall, this looks moderately suspicious'
+                            : 'Overall, this appears low risk'}
                       </span>
                       <span className="text-xs text-slate-400 font-mono">
                         Score: <span className="text-white font-bold">{activeCase.riskScore}/100</span>
@@ -855,9 +1014,8 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
                 {/* Progress bar */}
                 <div className="w-full h-2 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
                   <div
-                    className={`h-full rounded-full ${
-                      activeCase.riskScore > 75 ? 'bg-red-500' : activeCase.riskScore > 50 ? 'bg-amber-500' : 'bg-emerald-500'
-                    }`}
+                    className={`h-full rounded-full ${activeCase.riskScore > 75 ? 'bg-red-500' : activeCase.riskScore > 50 ? 'bg-amber-500' : 'bg-emerald-500'
+                      }`}
                     style={{ width: `${activeCase.riskScore}%` }}
                   />
                 </div>
@@ -916,114 +1074,136 @@ export const InvestigationWorkspace: React.FC<InvestigationWorkspaceProps> = ({
         </div>
       </div>
 
-      {/* Modal: Ingest New Evidence */}
-      {showAddEvidenceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl p-6 w-full max-w-lg space-y-4 text-slate-200">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <h3 className="text-lg font-bold text-white">Add Suspicious Evidence</h3>
-              <button
-                onClick={() => setShowAddEvidenceModal(false)}
-                className="text-slate-400 hover:text-white text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleAddCustomEvidence} className="space-y-4">
-              <div>
-                <label className="block text-xs font-mono uppercase text-slate-400 mb-1.5">
-                  Artifact Category
-                </label>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {(['message', 'url', 'screenshot', 'email', 'audio'] as const).map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setCustomTypeInput(type)}
-                      className={`py-2 text-xs font-bold rounded-lg capitalize border transition-all ${
-                        customTypeInput === type
-                          ? 'bg-emerald-500 text-slate-950 border-emerald-500 font-bold'
-                          : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
-                      }`}
-                    >
-                      {type}
-                    </button>
-                  ))}
-                </div>
+      {/* Modal: Ingest New Evidence with AnimatePresence */}
+      <AnimatePresence>
+        {showAddEvidenceModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowAddEvidenceModal(false); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 12 }}
+              transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+              className="bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl p-6 w-full max-w-lg space-y-4 text-slate-200"
+            >
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                <h3 className="text-lg font-bold text-white">Add Suspicious Evidence</h3>
+                <motion.button
+                  whileHover={{ scale: 1.1, color: '#ffffff' }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setShowAddEvidenceModal(false)}
+                  className="text-slate-400 hover:text-white text-sm font-bold p-1 cursor-pointer"
+                >
+                  ✕
+                </motion.button>
               </div>
 
-              {(customTypeInput === 'screenshot' || customTypeInput === 'audio') && (
+              <form onSubmit={handleAddCustomEvidence} className="space-y-4">
                 <div>
                   <label className="block text-xs font-mono uppercase text-slate-400 mb-1.5">
-                    Upload {customTypeInput === 'screenshot' ? 'Image / Screenshot' : 'Audio Recording'}
+                    Artifact Category
+                  </label>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {(['message', 'url', 'screenshot', 'email', 'audio'] as const).map((type) => (
+                      <motion.button
+                        key={type}
+                        type="button"
+                        whileHover={{ scale: 1.04 }}
+                        whileTap={{ scale: 0.96 }}
+                        onClick={() => setCustomTypeInput(type)}
+                        className={`py-2 text-xs font-bold rounded-xl capitalize border transition-all cursor-pointer ${customTypeInput === type
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-500 font-bold shadow-xs'
+                          : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
+                          }`}
+                      >
+                        {type}
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+
+                {(customTypeInput === 'screenshot' || customTypeInput === 'audio') && (
+                  <div>
+                    <label className="block text-xs font-mono uppercase text-slate-400 mb-1.5">
+                      Upload {customTypeInput === 'screenshot' ? 'Image / Screenshot' : 'Audio Recording'}
+                    </label>
+                    <input
+                      type="file"
+                      accept={customTypeInput === 'screenshot' ? 'image/*' : 'audio/*'}
+                      onChange={(e) => setSelectedEvidenceFile(e.target.files?.[0] || null)}
+                      className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-2xl font-mono text-slate-300 file:mr-3 file:py-1 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-emerald-400 hover:file:bg-slate-700 cursor-pointer"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-mono uppercase text-slate-400 mb-1.5">
+                    Suspicious URL / Link (Optional)
                   </label>
                   <input
-                    type="file"
-                    accept={customTypeInput === 'screenshot' ? 'image/*' : 'audio/*'}
-                    onChange={(e) => setSelectedEvidenceFile(e.target.files?.[0] || null)}
-                    className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl font-mono text-slate-300 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-emerald-400 hover:file:bg-slate-700"
+                    type="text"
+                    value={customUrlInput}
+                    onChange={(e) => setCustomUrlInput(e.target.value)}
+                    placeholder="https://auth-lookalike.xyz/login"
+                    className="w-full px-3.5 py-2 text-xs bg-slate-950 border border-slate-800 rounded-2xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-white placeholder-slate-600"
                   />
                 </div>
-              )}
 
-              <div>
-                <label className="block text-xs font-mono uppercase text-slate-400 mb-1.5">
-                  Suspicious URL / Link (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={customUrlInput}
-                  onChange={(e) => setCustomUrlInput(e.target.value)}
-                  placeholder="https://auth-lookalike.xyz/login"
-                  className="w-full px-3.5 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-white placeholder-slate-600"
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-mono uppercase text-slate-400 mb-1.5">
+                    Message Text / Header / Incident Description
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={customTextInput}
+                    onChange={(e) => setCustomTextInput(e.target.value)}
+                    placeholder="Paste the SMS, email text, warning prompt, or suspicious message here..."
+                    className="w-full px-3.5 py-2 text-xs bg-slate-950 border border-slate-800 rounded-2xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-sans text-white placeholder-slate-600"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-mono uppercase text-slate-400 mb-1.5">
-                  Message Text / Header / Incident Description
-                </label>
-                <textarea
-                  rows={4}
-                  value={customTextInput}
-                  onChange={(e) => setCustomTextInput(e.target.value)}
-                  placeholder="Paste the SMS, email text, warning prompt, or suspicious message here..."
-                  className="w-full px-3.5 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-sans text-white placeholder-slate-600"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddEvidenceModal(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-full border border-slate-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isAnalyzing}
-                  className="px-5 py-2 text-xs font-bold text-slate-950 bg-emerald-500 hover:bg-emerald-400 rounded-full transition-all shadow-xs flex items-center gap-1.5"
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Correlating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Ingest &amp; Analyze</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                <div className="flex justify-end gap-2 pt-2">
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowAddEvidenceModal(false)}
+                    className="px-4 py-2 text-xs font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-full border border-slate-700 cursor-pointer"
+                  >
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    type="submit"
+                    whileHover={{ scale: 1.03, boxShadow: '0 0 20px rgba(16,185,129,0.35)' }}
+                    whileTap={{ scale: 0.97 }}
+                    disabled={isAnalyzing}
+                    className="px-5 py-2 text-xs font-bold text-slate-950 bg-emerald-500 hover:bg-emerald-400 rounded-full transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Correlating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Ingest &amp; Analyze</span>
+                      </>
+                    )}
+                  </motion.button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
+
 

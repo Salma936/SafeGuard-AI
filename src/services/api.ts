@@ -1,4 +1,4 @@
-import { ThreatAnalysisResult, AnalyticsSummary } from '../types';
+import { ThreatAnalysisResult, AnalyticsSummary, ForensicsAnalysisResult } from '../types';
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -112,4 +112,16 @@ export async function getIncidentTimeline(incidentId: string): Promise<any[]> {
 export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
   const response = await fetch('/api/analytics/summary');
   return handleResponse<AnalyticsSummary>(response);
+}
+
+export async function analyzeScreenshotForensics(file: File): Promise<ForensicsAnalysisResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch('/api/analyze-screenshot', {
+    method: 'POST',
+    body: formData,
+  });
+
+  return handleResponse<ForensicsAnalysisResult>(response);
 }
