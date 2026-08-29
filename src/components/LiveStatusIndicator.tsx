@@ -10,28 +10,28 @@ export interface LiveStatusIndicatorProps {
 
 const colorStyles = {
   active: {
-    dot: 'bg-emerald-400',
-    ping: 'bg-emerald-400/50',
-    border: 'border-emerald-500/20',
-    text: 'text-emerald-400',
+    dot: 'bg-[#5FC9E8]',
+    ping: 'bg-[#5FC9E8]/50',
+    border: 'border-[#5FC9E8]/20',
+    text: 'text-[#5FC9E8]',
   },
   warning: {
-    dot: 'bg-amber-400',
-    ping: 'bg-amber-400/50',
-    border: 'border-amber-500/20',
-    text: 'text-amber-400',
+    dot: 'bg-[#E0A458]',
+    ping: 'bg-[#E0A458]/50',
+    border: 'border-[#E0A458]/20',
+    text: 'text-[#E0A458]',
   },
   critical: {
-    dot: 'bg-rose-400',
-    ping: 'bg-rose-400/50',
-    border: 'border-rose-500/20',
-    text: 'text-rose-400',
+    dot: 'bg-[#D9705A]',
+    ping: 'bg-[#D9705A]/50',
+    border: 'border-[#D9705A]/20',
+    text: 'text-[#D9705A]',
   },
   idle: {
-    dot: 'bg-slate-400',
-    ping: 'bg-slate-400/40',
-    border: 'border-slate-500/20',
-    text: 'text-slate-400',
+    dot: 'bg-[#7A8794]',
+    ping: 'bg-[#7A8794]/40',
+    border: 'border-[#7A8794]/20',
+    text: 'text-[#7A8794]',
   },
 };
 

@@ -34,7 +34,7 @@ const pageVariants = {
 
 export const AnimatedPage: React.FC<AnimatedPageProps> = ({
   children,
-  className = 'flex-1 flex flex-col',
+  className = 'flex-1 flex flex-col w-full min-w-0',
   ...props
 }) => {
   return (

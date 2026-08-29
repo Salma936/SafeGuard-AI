@@ -7,147 +7,144 @@ interface FeatureSectionProps {
   onNavigate: (view: ViewMode) => void;
 }
 
-const gridVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.08,
-      delayChildren: 0.1,
-    },
-  },
-};
-
-const cardVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.45,
-      ease: [0.25, 0.1, 0.25, 1],
-    },
-  },
-};
-
 export const FeatureSection: React.FC<FeatureSectionProps> = ({ onNavigate }) => {
   const features = [
     {
       id: 'feat-1',
+      num: '01',
       title: 'Multimodal Investigation',
       description: 'Analyze messages, URLs, screenshots, images, and audio evidence in one unified investigation.',
       icon: Layers,
       tag: 'Multi-Evidence Ingestion',
+      iconColor: '#5FC9E8',
+      iconBg: 'rgba(95, 201, 232, 0.08)',
+      iconBorder: 'rgba(95, 201, 232, 0.2)',
     },
     {
       id: 'feat-2',
+      num: '02',
       title: 'Incident Reconstruction',
       description: 'Connect related evidence and events to understand how a suspicious interaction unfolded.',
       icon: Network,
       tag: 'Chronology Mapping',
+      iconColor: '#5FC9E8',
+      iconBg: 'rgba(95, 201, 232, 0.08)',
+      iconBorder: 'rgba(95, 201, 232, 0.2)',
     },
     {
       id: 'feat-3',
+      num: '03',
       title: 'Personalized Protection',
       description: 'Get situation-specific recommendations based on the evidence and risk detected.',
       icon: ShieldCheck,
       tag: 'Adaptive Guidance',
+      iconColor: '#E0A458',
+      iconBg: 'rgba(224, 164, 88, 0.08)',
+      iconBorder: 'rgba(224, 164, 88, 0.2)',
     },
     {
       id: 'feat-4',
+      num: '04',
       title: 'Evidence & Recovery',
       description: 'Organize evidence, preserve an incident timeline, and generate practical recovery guidance.',
       icon: FileSpreadsheet,
       tag: 'Chain of Custody',
+      iconColor: '#5FC9E8',
+      iconBg: 'rgba(95, 201, 232, 0.08)',
+      iconBorder: 'rgba(95, 201, 232, 0.2)',
     },
   ];
 
   return (
-    <section className="py-16 md:py-24 bg-[#090D14] border-b border-slate-800/80 relative overflow-hidden">
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse 60% 50% at 50% 0%, rgba(16,185,129,0.08), transparent 70%)' }}
-      />
+    <section className="py-16 md:py-24 border-b border-white/[0.06] relative">
       <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 relative">
         {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-60px' }}
-          transition={{ duration: 0.5 }}
-          className="text-center max-w-3xl mx-auto mb-16"
-        >
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 text-emerald-400 text-xs font-mono font-bold tracking-wider uppercase mb-4 border border-emerald-500/20">
+        <div className="text-center max-w-3xl mx-auto mb-14">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0D1116] text-[#5FC9E8] text-xs font-mono font-bold tracking-wider uppercase mb-3 border border-white/[0.06]">
             <span>CORE CAPABILITIES</span>
           </div>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-4">
+          <h2
+            className="text-3xl sm:text-4xl md:text-5xl font-semibold text-[#E8ECEF] tracking-tight mb-4"
+            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+          >
             From suspicious evidence to clear action.
           </h2>
-          <p className="text-base sm:text-lg text-slate-400 font-normal leading-relaxed">
+          <p className="text-base sm:text-lg text-[#7A8794] leading-relaxed">
             SafeGuard equips you with dedicated forensic analysis and guided recovery to handle cyber threats calmly and decisively.
           </p>
-        </motion.div>
+        </div>
 
-        {/* 4 Clean Feature Cards with Motion Stagger */}
-        <motion.div
-          variants={gridVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: '-60px' }}
-          className="grid grid-cols-1 md:grid-cols-2 gap-6"
-        >
+        {/* 4 Capability Glass Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {features.map((feature, idx) => {
             const Icon = feature.icon;
             return (
-              <motion.div
+              <div
                 key={feature.id}
                 id={`feature-card-${idx + 1}`}
-                variants={cardVariants}
-                whileHover={{
-                  y: -6,
-                  borderColor: 'rgba(16,185,129,0.4)',
-                  boxShadow: '0 20px 35px -10px rgba(16,185,129,0.12)',
-                  transition: { duration: 0.25 },
-                }}
-                whileTap={{ scale: 0.98 }}
                 onClick={() => onNavigate('investigate')}
-                className="group relative bg-slate-900/80 hover:bg-slate-900 rounded-3xl p-7 border border-slate-800 transition-all duration-300 shadow-lg shadow-black/40 flex flex-col justify-between cursor-pointer backdrop-blur-xs"
+                className="group relative rounded-[20px] p-7 cursor-pointer flex flex-col justify-between overflow-hidden transition-all duration-200"
+                style={{
+                  background: 'rgba(13, 17, 22, 0.55)',
+                  backdropFilter: 'blur(18px) saturate(140%)',
+                  WebkitBackdropFilter: 'blur(18px) saturate(140%)',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.borderColor = 'rgba(95, 201, 232, 0.25)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0px)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)';
+                }}
               >
+                {/* Large Low-Opacity Monospace Watermark Number in Corner */}
+                <span
+                  className="absolute top-3 right-5 font-mono font-bold text-6xl text-white/[0.04] pointer-events-none select-none tracking-tighter"
+                  aria-hidden="true"
+                >
+                  {feature.num}
+                </span>
+
                 <div>
-                  {/* Top row: Icon & Tag */}
-                  <div className="flex items-center justify-between mb-5">
-                    <motion.div
-                      whileHover={{ scale: 1.1, rotate: 2 }}
-                      className="w-12 h-12 rounded-2xl bg-emerald-500/5 border border-slate-800 text-emerald-400 flex items-center justify-center group-hover:border-emerald-500/40 group-hover:bg-emerald-500/10 transition-all duration-300"
+                  {/* Top row: Icon */}
+                  <div className="flex items-center justify-between mb-6">
+                    <div
+                      className="w-12 h-12 rounded-xl flex items-center justify-center transition-colors duration-200"
+                      style={{
+                        backgroundColor: feature.iconBg,
+                        border: `1px solid ${feature.iconBorder}`,
+                      }}
                     >
-                      <Icon className="w-6 h-6 text-emerald-400" />
-                    </motion.div>
-                    <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-md bg-slate-950 text-slate-400 border border-slate-800">
-                      0{idx + 1}
-                    </span>
+                      <Icon className="w-5 h-5" style={{ color: feature.iconColor }} strokeWidth={1.75} />
+                    </div>
                   </div>
 
                   {/* Title & Description */}
-                  <h3 className="text-xl font-bold text-white tracking-tight mb-2.5 group-hover:text-emerald-300 transition-colors">
+                  <h3
+                    className="text-xl font-semibold text-[#E8ECEF] tracking-tight mb-2.5 group-hover:text-[#5FC9E8] transition-colors duration-200"
+                    style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+                  >
                     {feature.title}
                   </h3>
-                  <p className="text-slate-400 text-sm leading-relaxed mb-6">
+                  <p className="text-[#7A8794] text-sm leading-relaxed mb-6 font-normal">
                     {feature.description}
                   </p>
                 </div>
 
-                {/* Bottom subtle capability pill */}
-                <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs font-medium">
-                  <span className="text-slate-500 font-mono">{feature.tag}</span>
-                  <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold group-hover:text-emerald-300">
+                {/* Bottom capability tag */}
+                <div className="pt-4 border-t border-white/[0.05] flex items-center justify-between text-xs font-medium">
+                  <span className="text-[#4A5560] font-mono">{feature.tag}</span>
+                  <span className="inline-flex items-center gap-1 text-[#5FC9E8] font-semibold">
                     <span>Explore in Studio</span>
-                    <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                    <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-200" />
                   </span>
                 </div>
-              </motion.div>
+              </div>
             );
           })}
-        </motion.div>
+        </div>
       </div>
     </section>
   );

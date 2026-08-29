@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'motion/react';
 import { ViewMode } from '../types';
 import { LiveStatusIndicator } from './LiveStatusIndicator';
 
@@ -17,93 +16,95 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenModal, onScrol
   };
 
   return (
-    <footer className="border-t border-slate-800/80 bg-[#070A0F] py-12 px-6 sm:px-8 lg:px-12 flex flex-col justify-center text-slate-300">
+    <footer
+      className="border-t border-white/[0.06] py-12 px-6 sm:px-8 lg:px-12 flex flex-col justify-center text-[#7A8794]"
+      style={{
+        background: 'rgba(6, 8, 11, 0.9)',
+      }}
+    >
       <div className="max-w-7xl mx-auto w-full">
         {/* Top bar: Brand, Lifecycle phases, Victim Safety summary */}
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 mb-8 pb-8 border-b border-slate-800/80">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 mb-8 pb-8 border-b border-white/[0.06]">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 lg:gap-12">
             {/* Brand Logo */}
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+            <button
               onClick={() => onNavigate('landing')}
-              className="text-base font-bold tracking-tight flex items-center gap-2 text-white group focus:outline-none cursor-pointer"
+              className="text-base font-semibold tracking-tight flex items-center gap-2 text-[#E8ECEF] group focus:outline-none cursor-pointer"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
             >
-              <span className="w-5 h-5 bg-emerald-500 rounded-lg flex items-center justify-center text-slate-950 shadow-[0_0_8px_rgba(16,185,129,0.3)]">
-                <span className="w-2 h-2 bg-slate-950 rounded-xs" />
+              <span className="w-5 h-5 bg-[#5FC9E8] rounded-md flex items-center justify-center text-[#0A0D10] shadow-[0_0_8px_rgba(95,201,232,0.3)]">
+                <span className="w-2 h-2 bg-[#0A0D10] rounded-xs" />
               </span>
               <span>SafeGuard AI</span>
-            </motion.button>
+            </button>
 
             {/* Lifecycle Phase Markers */}
             <div className="flex flex-wrap items-center gap-4 sm:gap-6 md:gap-8">
               <div className="flex flex-col">
-                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-0.5">Submit</span>
-                <span className="text-xs font-bold text-slate-300">01 Evidence</span>
+                <span className="text-[10px] text-[#4A5560] font-bold uppercase tracking-widest mb-0.5 font-mono">Submit</span>
+                <span className="text-xs font-semibold text-[#E8ECEF] font-mono">01 Evidence</span>
               </div>
-              <div className="w-6 sm:w-8 h-[1px] bg-slate-800 hidden sm:block" />
+              <div className="w-6 sm:w-8 h-[1px] bg-white/[0.06] hidden sm:block" />
 
               <div className="flex flex-col">
-                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-0.5">Analyze</span>
-                <span className="text-xs font-bold text-slate-300">02 Investigate</span>
+                <span className="text-[10px] text-[#4A5560] font-bold uppercase tracking-widest mb-0.5 font-mono">Analyze</span>
+                <span className="text-xs font-semibold text-[#E8ECEF] font-mono">02 Investigate</span>
               </div>
-              <div className="w-6 sm:w-8 h-[1px] bg-slate-800 hidden sm:block" />
+              <div className="w-6 sm:w-8 h-[1px] bg-white/[0.06] hidden sm:block" />
 
               <div className="flex flex-col">
-                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-0.5">Act</span>
-                <span className="text-xs font-bold text-slate-300">03 Protect</span>
+                <span className="text-[10px] text-[#4A5560] font-bold uppercase tracking-widest mb-0.5 font-mono">Act</span>
+                <span className="text-xs font-semibold text-[#E8ECEF] font-mono">03 Protect</span>
               </div>
-              <div className="w-6 sm:w-8 h-[1px] bg-slate-800 hidden sm:block" />
+              <div className="w-6 sm:w-8 h-[1px] bg-white/[0.06] hidden sm:block" />
 
               <div className="flex flex-col">
-                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-0.5">Restore</span>
-                <span className="text-xs font-bold text-slate-300">04 Recover</span>
+                <span className="text-[10px] text-[#4A5560] font-bold uppercase tracking-widest mb-0.5 font-mono">Restore</span>
+                <span className="text-xs font-semibold text-[#E8ECEF] font-mono">04 Recover</span>
               </div>
             </div>
           </div>
 
           {/* Victim safety summary */}
           <div className="lg:text-right">
-            <p className="text-sm font-bold text-white mb-1">Built around victim safety.</p>
-            <p className="text-xs text-slate-400">Transparent analysis &bull; Privacy-conscious &bull; Actionable guidance</p>
+            <p className="text-sm font-semibold text-[#E8ECEF] mb-1" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              Built around victim safety.
+            </p>
+            <p className="text-xs text-[#7A8794]">Transparent analysis &bull; Privacy-conscious &bull; Actionable guidance</p>
           </div>
         </div>
 
-        {/* Middle Navigation bar: Home | Live Demo | How It Works | About */}
+        {/* Middle Navigation bar */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-semibold text-slate-400">
-            <motion.button
+          <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-semibold text-[#7A8794]">
+            <button
               id="footer-nav-home"
-              whileHover={{ color: '#ffffff', x: 1 }}
               onClick={() => onNavigate('landing')}
-              className="hover:text-white transition-colors cursor-pointer"
+              className="hover:text-[#E8ECEF] transition-colors cursor-pointer"
             >
               Home
-            </motion.button>
-            <motion.button
+            </button>
+            <button
               id="footer-nav-live-demo"
-              whileHover={{ scale: 1.05 }}
               onClick={() => handleNavClick('live-demo')}
-              className="hover:text-emerald-300 transition-colors text-emerald-400 font-bold cursor-pointer"
+              className="hover:text-[#8ee1f9] transition-colors text-[#5FC9E8] font-bold cursor-pointer"
             >
               Live Demo
-            </motion.button>
-            <motion.button
+            </button>
+            <button
               id="footer-nav-how-it-works"
-              whileHover={{ color: '#ffffff', x: 1 }}
               onClick={() => handleNavClick('how-it-works')}
-              className="hover:text-white transition-colors cursor-pointer"
+              className="hover:text-[#E8ECEF] transition-colors cursor-pointer"
             >
               How It Works
-            </motion.button>
-            <motion.button
+            </button>
+            <button
               id="footer-nav-about"
-              whileHover={{ color: '#ffffff', x: 1 }}
               onClick={() => onOpenModal('company')}
-              className="hover:text-white transition-colors cursor-pointer"
+              className="hover:text-[#E8ECEF] transition-colors cursor-pointer"
             >
               About
-            </motion.button>
+            </button>
           </nav>
 
           <LiveStatusIndicator
@@ -114,14 +115,14 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenModal, onScrol
         </div>
 
         {/* Bottom copyright line */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] text-slate-500 font-medium gap-2">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] text-[#4A5560] font-medium gap-2">
           <span>AI-powered digital safety assistant for cyber-abuse response.</span>
           <div className="flex gap-4 uppercase tracking-widest text-[10px] font-mono">
             <span>&copy; {new Date().getFullYear()} SafeGuard AI</span>
-            <button onClick={() => onOpenModal('company')} className="hover:text-slate-300 transition-colors cursor-pointer">
+            <button onClick={() => onOpenModal('company')} className="hover:text-[#7A8794] transition-colors cursor-pointer">
               Privacy Policy
             </button>
-            <button onClick={() => onOpenModal('services')} className="hover:text-slate-300 transition-colors cursor-pointer">
+            <button onClick={() => onOpenModal('services')} className="hover:text-[#7A8794] transition-colors cursor-pointer">
               Security Architecture
             </button>
           </div>
@@ -130,5 +131,3 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenModal, onScrol
     </footer>
   );
 };
-
-

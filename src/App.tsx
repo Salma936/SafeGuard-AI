@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
 import { ViewMode, IncidentCase } from './types';
 import { DEMO_INCIDENTS } from './data/demoIncidents';
 import { Header } from './components/Header';
@@ -18,6 +18,7 @@ import { InfoModals } from './components/InfoModals';
 import { InvestigationWorkspace } from './components/InvestigationWorkspace';
 import ScreenshotAnalyzer from './components/ScreenshotAnalyzer';
 import { AnimatedPage } from './components/AnimatedPage';
+import { AmbientBackground } from './components/AmbientBackground';
 
 export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('landing');
@@ -53,62 +54,67 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#090D14] text-slate-100 flex flex-col font-sans selection:bg-emerald-500/20 selection:text-emerald-300">
-      <AnimatePresence mode="wait">
-        {viewMode === 'landing' ? (
-          <AnimatedPage key="landing">
-            <Header
-              currentView={viewMode}
-              onNavigate={handleNavigate}
-              onScrollToSection={handleScrollToSection}
-              onOpenModal={(modal) => setActiveModal(modal)}
-            />
+    <div className="min-h-screen bg-[#06080B] text-[#E8ECEF] flex flex-col relative selection:bg-[#5FC9E8]/20 selection:text-[#5FC9E8]">
+      {/* Site-wide Ambient Canvas Particle Field and Glow Wash */}
+      <AmbientBackground />
 
-            <main className="flex-1">
-              <Hero
+      <div className="relative z-10 flex flex-col min-h-screen">
+        <AnimatePresence mode="wait">
+          {viewMode === 'landing' ? (
+            <AnimatedPage key="landing">
+              <Header
+                currentView={viewMode}
                 onNavigate={handleNavigate}
                 onScrollToSection={handleScrollToSection}
+                onOpenModal={(modal) => setActiveModal(modal)}
               />
 
-              <FeatureSection
+              <main className="flex-1 w-full min-w-0">
+                <Hero
+                  onNavigate={handleNavigate}
+                  onScrollToSection={handleScrollToSection}
+                />
+
+                <FeatureSection
+                  onNavigate={handleNavigate}
+                />
+
+                <LiveDemoSection
+                  onNavigate={handleNavigate}
+                  onSelectDemoCase={handleSelectDemoCase}
+                />
+
+                <HowItWorks
+                  onNavigate={handleNavigate}
+                />
+
+                <TrustPrivacySection
+                  onNavigate={handleNavigate}
+                  onOpenAboutModal={() => setActiveModal('about')}
+                />
+              </main>
+
+              <Footer
                 onNavigate={handleNavigate}
+                onScrollToSection={handleScrollToSection}
+                onOpenModal={(modal) => setActiveModal(modal)}
               />
-
-              <LiveDemoSection
+            </AnimatedPage>
+          ) : viewMode === 'screenshot-analyzer' ? (
+            <AnimatedPage key="screenshot-analyzer">
+              <ScreenshotAnalyzer onNavigate={handleNavigate} />
+            </AnimatedPage>
+          ) : (
+            <AnimatedPage key="workspace">
+              <InvestigationWorkspace
+                initialMode={viewMode}
                 onNavigate={handleNavigate}
-                onSelectDemoCase={handleSelectDemoCase}
+                selectedDemoCase={selectedDemoCase}
               />
-
-              <HowItWorks
-                onNavigate={handleNavigate}
-              />
-
-              <TrustPrivacySection
-                onNavigate={handleNavigate}
-                onOpenAboutModal={() => setActiveModal('about')}
-              />
-            </main>
-
-            <Footer
-              onNavigate={handleNavigate}
-              onScrollToSection={handleScrollToSection}
-              onOpenModal={(modal) => setActiveModal(modal)}
-            />
-          </AnimatedPage>
-        ) : viewMode === 'screenshot-analyzer' ? (
-          <AnimatedPage key="screenshot-analyzer">
-            <ScreenshotAnalyzer onNavigate={handleNavigate} />
-          </AnimatedPage>
-        ) : (
-          <AnimatedPage key="workspace">
-            <InvestigationWorkspace
-              initialMode={viewMode}
-              onNavigate={handleNavigate}
-              selectedDemoCase={selectedDemoCase}
-            />
-          </AnimatedPage>
-        )}
-      </AnimatePresence>
+            </AnimatedPage>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Popups and Nav Modals */}
       <InfoModals
@@ -119,4 +125,3 @@ export default function App() {
     </div>
   );
 }
-

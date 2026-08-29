@@ -1,84 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Play, ShieldAlert, Sparkles, MessageSquare, Link2, FileSearch, Cpu } from 'lucide-react';
+import { ArrowRight, Play, MessageSquare, Link2, FileSearch, Mic } from 'lucide-react';
 import { ViewMode } from '../types';
 import { LiveStatusIndicator } from './LiveStatusIndicator';
+import { ThreatIndexGauge } from './ThreatIndexGauge';
 
 interface HeroProps {
   onNavigate: (view: ViewMode) => void;
   onScrollToSection: (sectionId: string) => void;
 }
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.09,
-      delayChildren: 0.05,
-    },
-  },
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.45,
-      ease: [0.25, 0.1, 0.25, 1],
-    },
-  },
-};
-
 export const Hero: React.FC<HeroProps> = ({ onNavigate, onScrollToSection }) => {
-  // Subtle animated analysis pulse simulation
-  const [activeStep, setActiveStep] = useState<number>(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setActiveStep((prev) => (prev + 1) % 4);
-    }, 2800);
-    return () => clearInterval(timer);
-  }, []);
-
-  const scanningStages = [
-    { label: 'Multimodal Ingestion', detail: 'SMS text + Suspicious URL + Screenshot parsed' },
-    { label: 'Heuristic & LLM Parsing', detail: 'Urgency coercion & credential harvesting identified' },
-    { label: 'Chronology Correlation', detail: '3 artifacts mapped across 4-minute attack window' },
-    { label: 'Containment Synthesis', detail: 'Generating 4 prioritized containment & recovery steps' },
-  ];
-
   return (
-    <section className="relative overflow-hidden bg-[#090D14] border-b border-slate-800/80 pt-8 pb-16 md:py-20 lg:py-24">
-      {/* Background radial glow */}
-      <motion.div
-        animate={{
-          scale: [1, 1.08, 1],
-          opacity: [0.08, 0.14, 0.08],
-        }}
-        transition={{
-          duration: 6,
-          repeat: Infinity,
-          ease: 'easeInOut',
-        }}
-        className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-emerald-500 blur-[130px] pointer-events-none rounded-full"
-      />
-      <div className="absolute top-1/3 right-10 w-[300px] h-[250px] bg-cyan-500/5 blur-[100px] pointer-events-none rounded-full" />
-
-      <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-14 items-center">
-          {/* Left Column (6 cols): Staggered Copy and Direct Action */}
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="lg:col-span-6 flex flex-col justify-center text-left"
-          >
-            {/* Cybersecurity Badge */}
-            <motion.div variants={itemVariants} className="mb-6">
-              <div className="inline-flex items-center gap-2 bg-slate-900/90 text-emerald-400 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide border border-emerald-500/30 w-fit shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+    <section className="relative overflow-hidden pt-8 pb-16 md:py-20 lg:py-24 border-b border-white/[0.06] w-full">
+      <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 relative z-10 w-full">
+        {/* Main Side-by-Side Flex Container (Cross-Browser Safari & Chrome Resilient) */}
+        <div className="flex flex-col lg:flex-row lg:flex-nowrap items-center justify-between gap-10 lg:gap-12 xl:gap-16 w-full min-w-0">
+          {/* Left Column: Human and Accessible Landing Copy */}
+          <div className="flex-1 flex flex-col justify-center text-left min-w-0 w-full lg:max-w-2xl">
+            {/* Eyebrow badge */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
+              className="mb-5"
+            >
+              <div className="inline-flex items-center gap-2 bg-[#0D1116] text-[#5FC9E8] px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide border border-[#5FC9E8]/30 w-fit shadow-[0_0_15px_rgba(95,201,232,0.1)]">
                 <LiveStatusIndicator size="sm" status="active" />
                 <span className="font-mono uppercase text-[11px] font-bold tracking-wider">
                   AI DIGITAL SAFETY ASSISTANT
@@ -88,209 +35,156 @@ export const Hero: React.FC<HeroProps> = ({ onNavigate, onScrollToSection }) => 
 
             {/* Headline */}
             <motion.h1
-              variants={itemVariants}
-              className="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-[1.08] tracking-tight text-white mb-6"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+              className="font-display font-bold text-4xl sm:text-5xl lg:text-6xl tracking-tight text-[#E8ECEF] mb-6 leading-[1.08]"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
             >
               Something doesn't feel right online?{' '}
-              <span className="block text-emerald-400 mt-1">Let AI investigate it.</span>
+              <span className="block text-[#5FC9E8] mt-1">Let AI investigate it.</span>
             </motion.h1>
 
             {/* Supporting text */}
             <motion.p
-              variants={itemVariants}
-              className="text-base sm:text-lg text-slate-300 leading-relaxed mb-8 max-w-xl"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              className="text-base sm:text-lg text-[#7A8794] leading-relaxed mb-8 max-w-xl"
+              style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}
             >
               Upload a suspicious message, link, screenshot, or audio. SafeGuard AI analyzes the evidence, reconstructs what happened, and gives you clear steps to protect yourself and recover.
             </motion.p>
 
             {/* CTAs */}
-            <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-4 mb-10">
-              <motion.button
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              className="flex flex-wrap items-center gap-4 mb-8"
+            >
+              <button
                 id="hero-primary-cta"
-                whileHover={{ scale: 1.03, boxShadow: '0 0 35px rgba(16,185,129,0.45)' }}
-                whileTap={{ scale: 0.97 }}
                 onClick={() => onNavigate('investigate')}
-                className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-7 py-3.5 rounded-full transition-all shadow-[0_0_25px_rgba(16,185,129,0.25)] inline-flex items-center gap-2.5 text-sm sm:text-base cursor-pointer"
+                className="bg-[#5FC9E8] hover:bg-[#7be2fe] text-[#0A0D10] font-semibold px-7 py-3.5 rounded-full transition-all duration-200 inline-flex items-center gap-2.5 text-sm sm:text-base cursor-pointer"
+                style={{
+                  boxShadow: '0 8px 30px -8px rgba(95, 201, 232, 0.5)',
+                }}
               >
                 <span>Analyze an Incident</span>
                 <ArrowRight className="w-4 h-4" />
-              </motion.button>
+              </button>
 
-              <motion.button
+              <button
                 id="hero-secondary-cta"
-                whileHover={{ scale: 1.03, backgroundColor: 'rgba(30,41,59,0.95)' }}
-                whileTap={{ scale: 0.97 }}
                 onClick={() => onScrollToSection('live-demo')}
-                className="bg-slate-900/80 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-700/80 hover:border-slate-600 px-7 py-3.5 rounded-full font-bold transition-all inline-flex items-center gap-2 text-sm sm:text-base shadow-xs cursor-pointer"
+                className="text-[#E8ECEF] hover:text-white px-7 py-3.5 rounded-full font-semibold transition-all duration-200 inline-flex items-center gap-2 text-sm sm:text-base cursor-pointer"
+                style={{
+                  background: 'rgba(13, 17, 22, 0.55)',
+                  backdropFilter: 'blur(18px) saturate(140%)',
+                  WebkitBackdropFilter: 'blur(18px) saturate(140%)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                }}
               >
-                <Play className="w-4 h-4 text-emerald-400 fill-emerald-400" />
+                <Play className="w-4 h-4 text-[#5FC9E8] fill-[#5FC9E8]" />
                 <span>View Live Demo</span>
-              </motion.button>
+              </button>
             </motion.div>
 
             {/* Evidence formats supported */}
             <motion.div
-              variants={itemVariants}
-              className="flex items-center gap-4 text-xs text-slate-400 pt-4 border-t border-slate-800/80"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.45 }}
+              className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs text-[#7A8794] pt-4 border-t border-white/[0.06]"
             >
-              <span className="font-mono uppercase text-[11px] text-slate-500 font-semibold tracking-wider">
+              <span className="font-mono uppercase text-[11px] text-[#4A5560] font-semibold tracking-wider">
                 Analyzes:
               </span>
-              <span className="flex items-center gap-1.5 text-slate-300">
-                <MessageSquare className="w-3.5 h-3.5 text-emerald-400" /> Messages
+              <span className="flex items-center gap-1.5 text-[#E8ECEF]">
+                <MessageSquare className="w-3.5 h-3.5 text-[#5FC9E8]" /> Messages
               </span>
-              <span className="text-slate-600">&bull;</span>
-              <span className="flex items-center gap-1.5 text-slate-300">
-                <Link2 className="w-3.5 h-3.5 text-emerald-400" /> Links
+              <span className="text-[#4A5560]">&bull;</span>
+              <span className="flex items-center gap-1.5 text-[#E8ECEF]">
+                <Link2 className="w-3.5 h-3.5 text-[#5FC9E8]" /> Links
               </span>
-              <span className="text-slate-600">&bull;</span>
-              <span className="flex items-center gap-1.5 text-slate-300">
-                <FileSearch className="w-3.5 h-3.5 text-emerald-400" /> Screenshots
+              <span className="text-[#4A5560]">&bull;</span>
+              <span className="flex items-center gap-1.5 text-[#E8ECEF]">
+                <FileSearch className="w-3.5 h-3.5 text-[#5FC9E8]" /> Screenshots
               </span>
-              <span className="text-slate-600">&bull;</span>
-              <span className="text-slate-300">Audio</span>
+              <span className="text-[#4A5560]">&bull;</span>
+              <span className="flex items-center gap-1.5 text-[#E8ECEF]">
+                <Mic className="w-3.5 h-3.5 text-[#5FC9E8]" /> Audio
+              </span>
             </motion.div>
-          </motion.div>
+          </div>
 
-          {/* Right Column (6 cols): AI Live Telemetry Visual with Motion */}
+          {/* Right Column: Composite Threat Index Circular Gauge Card (Fixed Width + Shrink-0 for Safari) */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 20 }}
+            initial={{ opacity: 0, scale: 0.96, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-            className="lg:col-span-6 flex justify-center"
+            transition={{ duration: 0.6, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full lg:w-[420px] xl:w-[440px] shrink-0 flex justify-center lg:justify-end"
+            style={{
+              flexShrink: 0,
+            }}
           >
-            <motion.div
-              whileHover={{ y: -4, transition: { duration: 0.25 } }}
-              className="w-full max-w-lg bg-slate-900/90 rounded-3xl border border-slate-800 shadow-2xl shadow-black/60 p-6 relative overflow-hidden backdrop-blur-sm"
+            <div
+              className="w-full max-w-md rounded-[24px] p-6 sm:p-7 relative overflow-hidden shrink-0"
+              style={{
+                background: 'rgba(13, 17, 22, 0.55)',
+                backdropFilter: 'blur(18px) saturate(140%)',
+                WebkitBackdropFilter: 'blur(18px) saturate(140%)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                width: '100%',
+              }}
             >
-              {/* Card top window bar */}
-              <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-800">
+              {/* Card Header Bar */}
+              <div className="flex items-center justify-between pb-4 mb-5 border-b border-white/[0.06]">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
-                  <span className="ml-2 text-xs font-mono font-medium text-slate-400 flex items-center gap-1.5">
-                    <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>SafeGuard AI Engine &bull; Active Triage</span>
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#5FC9E8] animate-pulse" />
+                  <span className="font-mono text-xs font-semibold tracking-wider text-[#E8ECEF] uppercase">
+                    COMPOSITE THREAT INDEX
                   </span>
                 </div>
-                <LiveStatusIndicator size="sm" status="active" label="REAL-TIME" />
+                <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-[#D9705A]/15 text-[#D9705A] border border-[#D9705A]/25 font-bold">
+                  HIGH RISK
+                </span>
               </div>
 
-              {/* Evidence ingestion stream mock */}
-              <div className="space-y-3 mb-5">
-                <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                  <span>Ingested Evidence Artifacts</span>
-                  <span className="text-emerald-400 font-bold">3 Sources Correlated</span>
-                </div>
-
-                {/* Evidence Artifact 1 */}
-                <motion.div
-                  whileHover={{ x: 2 }}
-                  className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-between gap-3 text-xs"
-                >
-                  <div className="flex items-center gap-2.5 truncate">
-                    <div className="w-7 h-7 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
-                      <MessageSquare className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="truncate">
-                      <div className="text-slate-200 font-medium truncate">
-                        SMS: "URGENT: Security alert. Verify account now..."
-                      </div>
-                      <div className="text-[10px] text-slate-500 font-mono">
-                        Timestamp: 10:32 AM &bull; Sender: +1 (800) 555-0199
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0 font-bold">
-                    Urgent Hook
-                  </span>
-                </motion.div>
-
-                {/* Evidence Artifact 2 */}
-                <motion.div
-                  whileHover={{ x: 2 }}
-                  className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-between gap-3 text-xs"
-                >
-                  <div className="flex items-center gap-2.5 truncate">
-                    <div className="w-7 h-7 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
-                      <Link2 className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="truncate">
-                      <div className="text-slate-200 font-mono text-[11px] truncate">
-                        https://security-verify-auth92.net/login
-                      </div>
-                      <div className="text-[10px] text-slate-500 font-mono">
-                        Timestamp: 10:34 AM &bull; Homoglyph spoofing detected
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0 font-bold">
-                    Phishing URL
-                  </span>
-                </motion.div>
+              {/* Animated Circular Gauge */}
+              <div className="py-2 flex justify-center">
+                <ThreatIndexGauge score={84} size={176} radius={70} strokeWidth={10} />
               </div>
 
-              {/* Dynamic Investigation Progress Telemetry */}
-              <div className="p-4 bg-slate-950/90 rounded-2xl border border-slate-800 mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>AI Reasoning Pipeline</span>
-                  </span>
-                  <span className="text-[11px] font-mono text-emerald-400 font-bold">
-                    Stage {activeStep + 1} of 4
-                  </span>
+              {/* Quick Telemetry Details */}
+              <div className="mt-5 space-y-2.5 pt-4 border-t border-white/[0.06]">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[#7A8794] font-mono">Triage Status</span>
+                  <span className="font-mono text-[#5FC9E8] font-semibold">Active Containment</span>
                 </div>
-
-                <div className="text-xs text-white font-medium mb-1">
-                  {scanningStages[activeStep].label}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[#7A8794] font-mono">Chained Artifacts</span>
+                  <span className="font-mono text-[#E8ECEF] font-bold">4 Verified (SHA-256)</span>
                 </div>
-                <div className="text-[11px] text-slate-400 font-mono mb-2.5">
-                  &gt; {scanningStages[activeStep].detail}
-                </div>
-
-                {/* Progress bar */}
-                <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                  <motion.div
-                    className="bg-emerald-500 h-full rounded-full"
-                    animate={{ width: `${((activeStep + 1) / 4) * 100}%` }}
-                    transition={{ duration: 0.5, ease: 'easeOut' }}
-                  />
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[#7A8794] font-mono">Primary Vector</span>
+                  <span className="font-mono text-[#E0A458] font-semibold">Phishing + MFA Fatigue</span>
                 </div>
               </div>
 
-              {/* Result Summary Bar */}
-              <div className="flex items-center justify-between p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-xs">
-                <div className="flex items-center gap-2">
-                  <ShieldAlert className="w-4 h-4 text-emerald-400" />
-                  <span className="font-semibold text-slate-200">Incident Risk Assessment:</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                    HIGH RISK
-                  </span>
-                  <span className="font-mono text-emerald-400 font-bold text-xs">
-                    94% Confidence
-                  </span>
-                </div>
-              </div>
-
-              {/* Quick Launch Link */}
-              <motion.button
-                whileHover={{ x: 3 }}
+              {/* Interactive workspace link */}
+              <button
                 onClick={() => onNavigate('investigate')}
-                className="w-full mt-3 py-2 text-center text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                className="w-full mt-5 py-2.5 text-center text-xs font-semibold text-[#5FC9E8] hover:text-[#8ee1f9] rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.05] flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer"
               >
-                <span>Launch Interactive Studio to test with your own files</span>
-                <ArrowRight className="w-3 h-3" />
-              </motion.button>
-            </motion.div>
+                <span>Launch Interactive Studio</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </motion.div>
         </div>
       </div>
     </section>
   );
 };
-
-
