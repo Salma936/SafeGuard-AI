@@ -27,7 +27,9 @@ import {
   Key,
   Activity,
   Mic,
-  MessageSquare
+  MessageSquare,
+  Lightbulb,
+  ChevronDown
 } from 'lucide-react';
 import {
   ViewMode,
@@ -264,43 +266,63 @@ const getIndicatorPlainLanguage = (indicator: string): string => {
 const getTacticPlainLanguage = (tactic: string): string => {
   const lower = tactic.toLowerCase();
 
-  if (lower.includes('urgent') || lower.includes('coercion')) {
-    return "Fabricating urgency to force immediate action";
+  if (lower.includes('aitm') || (lower.includes('proxy') && lower.includes('phishing'))) {
+    return "AiTM proxy phishing";
   }
 
-  if (lower.includes('lookalike') || lower.includes('credential')) {
-    return "Setting up copycat login screens to capture passwords";
-  }
-
-  if (lower.includes('fatigue') || lower.includes('prompt')) {
-    return "Spamming sign-in alerts until you approve the login";
+  if (lower.includes('fatigue') || lower.includes('prompt') || lower.includes('bombing')) {
+    return "MFA fatigue spam";
   }
 
   if (lower.includes('smishing') || lower.includes('sms')) {
-    return "Fake text messages pretending to be official alerts";
+    return "Fake emergency alert";
+  }
+
+  if (lower.includes('lookalike') || lower.includes('credential')) {
+    return "Copycat login page";
   }
 
   if (lower.includes('breach') || lower.includes('regurgitation')) {
-    return "Using an old leaked password to pretend your device was hacked";
+    return "Credential leak bluff";
   }
 
   if (lower.includes('bluff') || lower.includes('psychological')) {
-    return "Falsely claiming to have recorded your camera to scare you";
+    return "Extortion camera bluff";
   }
 
   if (lower.includes('cryptocurrency') || lower.includes('extortion')) {
-    return "Demanding cryptocurrency payments to avoid bank trace";
+    return "Crypto ransom demand";
   }
 
   if (lower.includes('impersonation') || lower.includes('typosquatting')) {
-    return "Impersonating a trusted service using a lookalike website address";
+    return "Brand impersonation";
   }
 
   if (lower.includes('stalkerware') || lower.includes('spyware')) {
-    return "Hidden tracking software monitoring your activity";
+    return "Tracking spyware";
   }
 
   return tactic;
+};
+
+const getSignalBadgeIcon = (indicator: string) => {
+  const lower = indicator.toLowerCase();
+  if (lower.includes('deadline') || lower.includes('urgency') || lower.includes('minute') || lower.includes('hour') || lower.includes('time') || lower.includes('pressure')) {
+    return Clock;
+  }
+  if (lower.includes('domain') || lower.includes('link') || lower.includes('url') || lower.includes('endpoint') || lower.includes('squatting')) {
+    return LinkIcon;
+  }
+  if (lower.includes('2fa') || lower.includes('mfa') || lower.includes('prompt') || lower.includes('push') || lower.includes('fatigue')) {
+    return ShieldAlert;
+  }
+  if (lower.includes('spoofed') || lower.includes('sender') || lower.includes('impersonat') || lower.includes('fake') || lower.includes('unknown')) {
+    return AlertTriangle;
+  }
+  if (lower.includes('ssl') || lower.includes('cert') || lower.includes('reverse proxy') || lower.includes('token') || lower.includes('auth')) {
+    return Lock;
+  }
+  return Zap;
 };
 
 export const InvestigationWorkspace: React.FC<
@@ -341,6 +363,11 @@ export const InvestigationWorkspace: React.FC<
     const [exportSuccessMessage, setExportSuccessMessage] =
       useState<string | null>(null);
     const [hasCopiedHash, setHasCopiedHash] = useState(false);
+    const [expandedEvidenceIds, setExpandedEvidenceIds] = useState<Record<string, boolean>>({});
+
+    const toggleEvidenceDetails = (id: string) => {
+      setExpandedEvidenceIds((prev) => ({ ...prev, [id]: !prev[id] }));
+    };
 
     // Toggle Action item completed
     const handleToggleAction = (actionId: string) => {
@@ -1650,7 +1677,7 @@ export const InvestigationWorkspace: React.FC<
                               y: -2,
                               borderColor: 'rgba(95, 201, 232, 0.3)'
                             }}
-                            className="w-full min-w-0 rounded-3xl border border-white/[0.06] p-5 shadow-xs transition-colors relative overflow-hidden"
+                            className="w-full min-w-0 rounded-2xl border border-white/[0.06] p-5 shadow-xs transition-all relative overflow-hidden"
                             style={{
                               background: 'rgba(13, 17, 22, 0.65)',
                               backdropFilter: 'blur(16px) saturate(130%)',
@@ -1659,100 +1686,135 @@ export const InvestigationWorkspace: React.FC<
                               borderLeftColor: severityColor
                             }}
                           >
-                            {/* Header: Type, Title, Mini Risk Gauge */}
-                            <div className="flex min-w-0 items-start justify-between gap-3 pb-3">
-                              <div className="flex min-w-0 items-center gap-2.5">
-                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.04] text-[#5FC9E8]">
-                                  {ev.type === 'message' && (
-                                    <FileText className="h-4 w-4" />
-                                  )}
-                                  {ev.type === 'url' && (
-                                    <LinkIcon className="h-4 w-4" />
-                                  )}
-                                  {ev.type === 'screenshot' && (
-                                    <Upload className="h-4 w-4" />
-                                  )}
-                                  {ev.type === 'email' && (
-                                    <FileText className="h-4 w-4" />
-                                  )}
-                                  {ev.type === 'audio' && (
-                                    <Mic className="h-4 w-4" />
-                                  )}
+                            {/* 1. Header Row */}
+                            <div className="flex min-w-0 items-start justify-between gap-3 mb-3.5">
+                              {/* Left: Icon in 36x36 colored square with 8px corner radius + Title & Timestamp */}
+                              <div className="flex min-w-0 items-center gap-3">
+                                <div
+                                  className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[8px] border"
+                                  style={{
+                                    backgroundColor: `${severityColor}15`,
+                                    borderColor: `${severityColor}30`,
+                                    color: severityColor,
+                                  }}
+                                >
+                                  {ev.type === 'message' && <MessageSquare className="h-4 w-4" />}
+                                  {ev.type === 'url' && <LinkIcon className="h-4 w-4" />}
+                                  {ev.type === 'screenshot' && <ShieldAlert className="h-4 w-4" />}
+                                  {ev.type === 'email' && <FileText className="h-4 w-4" />}
+                                  {ev.type === 'audio' && <Mic className="h-4 w-4" />}
                                 </div>
 
                                 <div className="min-w-0">
-                                  <div
-                                    className="break-words font-semibold text-sm text-[#E8ECEF]"
-                                    style={{
-                                      fontFamily: "'Space Grotesk', sans-serif"
-                                    }}
+                                  <h4
+                                    className="break-words font-semibold text-sm text-[#E8ECEF] leading-tight"
+                                    style={{ fontFamily: "'Space Grotesk', sans-serif" }}
                                   >
                                     {ev.title}
-                                  </div>
-                                  <div className="break-words text-[11px] font-mono text-[#7A8794]">
-                                    {ev.type.toUpperCase()} &bull; Ingested at{' '}
-                                    {ev.timestamp}{' '}
-                                    {ev.source ? `from ${ev.source}` : ''}
+                                  </h4>
+                                  <div className="break-words text-[11px] font-mono text-[#7A8794] mt-0.5">
+                                    {ev.type.toUpperCase()} &bull; Ingested at {ev.timestamp} {ev.source ? `from ${ev.source}` : ''}
                                   </div>
                                 </div>
                               </div>
 
-                              <div className="shrink-0 flex items-center">
-                                <MiniRiskGauge
-                                  score={ev.riskScore}
-                                  riskLevel={ev.riskLevel}
-                                  size={40}
-                                />
+                              {/* Right: Large risk score number (20px, bold) + one-line risk label */}
+                              <div className="shrink-0 text-right">
+                                <div
+                                  className="text-[20px] font-bold font-mono leading-none"
+                                  style={{ color: severityColor }}
+                                >
+                                  {ev.riskScore}
+                                </div>
+                                <div
+                                  className="text-[10px] font-mono font-bold uppercase mt-1 tracking-wider leading-none"
+                                  style={{ color: severityColor }}
+                                >
+                                  {ev.riskLevel.toLowerCase()} risk
+                                </div>
                               </div>
                             </div>
 
-                            {/* In-Text Highlighted Evidence Content (No extra inner box) */}
-                            <div className="w-full min-w-0 py-2 font-mono text-xs leading-relaxed text-[#E8ECEF] break-words">
-                              {renderAnnotatedEvidence(
-                                ev.content,
-                                ev.indicators,
-                                severityColor
-                              )}
-                            </div>
-
-                            {/* Clean Metadata Line (No nested box borders) */}
-                            {ev.metadata &&
-                              Object.keys(ev.metadata).length > 0 && (
-                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2 text-[11px] font-mono text-[#7A8794] border-t border-white/[0.04] mt-2">
-                                  {Object.entries(ev.metadata).map(
-                                    ([key, val]) => (
-                                      <span
-                                        key={key}
-                                        className="inline-flex items-center gap-1.5"
-                                      >
-                                        <span className="text-[#4A5560] font-semibold">
-                                          {key}:
-                                        </span>
-                                        <span className="text-[#E8ECEF]">
-                                          {val}
-                                        </span>
-                                      </span>
-                                    )
-                                  )}
-                                </div>
-                              )}
-
-                            {/* "WHAT THIS MEANS:" Typographic Annotation */}
-                            {viewDetailMode === 'simple' && (
-                              <div className="pt-3 mt-1 border-t border-white/[0.04]">
-                                <div className="font-mono text-[10.5px] font-bold text-[#5FC9E8] uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-[#5FC9E8] inline-block" />
-                                  <span>WHAT THIS MEANS:</span>
-                                </div>
-                                <p className="text-[#7A8794] font-sans text-xs leading-relaxed">
-                                  {ev.indicators.length > 0
-                                    ? getIndicatorPlainLanguage(
-                                        ev.indicators[0]
-                                      )
-                                    : 'Suspicious indicators detected for this evidence item.'}
-                                </p>
+                            {/* 2. Signal Badges Row (1-3 compact pill badges with icon + short label) */}
+                            {ev.indicators && ev.indicators.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-2 mb-3.5">
+                                {ev.indicators.slice(0, 3).map((ind, iIdx) => {
+                                  const BadgeIcon = getSignalBadgeIcon(ind);
+                                  return (
+                                    <div
+                                      key={iIdx}
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono border"
+                                      style={{
+                                        backgroundColor: `${severityColor}12`,
+                                        borderColor: `${severityColor}28`,
+                                        color: severityColor,
+                                      }}
+                                    >
+                                      <BadgeIcon className="w-3 h-3 shrink-0" />
+                                      <span className="truncate max-w-[240px] sm:max-w-xs">{ind}</span>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
+
+                            {/* 3. Insight Row ("WHAT THIS MEANS" restyled as single line with small lightbulb icon) */}
+                            <div className="pt-2.5 border-t border-white/[0.05] flex items-center justify-between gap-3 text-xs">
+                              <div className="flex items-center gap-2 min-w-0 text-[#7A8794] truncate">
+                                <Lightbulb className="w-3.5 h-3.5 text-[#5FC9E8] shrink-0" />
+                                <span className="font-semibold text-[#5FC9E8] shrink-0 text-[11px] font-mono uppercase">
+                                  What this means:
+                                </span>
+                                <span className="truncate text-[#E8ECEF] text-[11.5px]">
+                                  {ev.indicators.length > 0
+                                    ? getIndicatorPlainLanguage(ev.indicators[0])
+                                    : 'Suspicious indicators detected for this evidence item.'}
+                                </span>
+                              </div>
+
+                              {/* 4. Full Details Toggle Button */}
+                              <button
+                                type="button"
+                                onClick={() => toggleEvidenceDetails(ev.id)}
+                                className="shrink-0 inline-flex items-center gap-1 text-[11px] font-mono text-[#5FC9E8] hover:text-[#8ee1f9] cursor-pointer"
+                              >
+                                <span>{expandedEvidenceIds[ev.id] ? 'Hide details' : 'View full details'}</span>
+                                <ChevronDown className={`w-3 h-3 transition-transform ${expandedEvidenceIds[ev.id] ? 'rotate-180' : ''}`} />
+                              </button>
+                            </div>
+
+                            {/* 4. Collapsible Full Details (Raw message text, URLs, metadata) */}
+                            <AnimatePresence>
+                              {expandedEvidenceIds[ev.id] && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="mt-3 pt-3 border-t border-white/[0.06] space-y-2.5"
+                                >
+                                  {/* Raw Evidence Text */}
+                                  <div className="p-3 rounded-xl bg-[#06080B]/90 border border-white/[0.06] font-mono text-xs text-[#E8ECEF] leading-relaxed break-words">
+                                    <div className="text-[10px] font-mono uppercase text-[#7A8794] mb-1 font-semibold">
+                                      Raw Evidence Content:
+                                    </div>
+                                    {renderAnnotatedEvidence(ev.content, ev.indicators, severityColor)}
+                                  </div>
+
+                                  {/* Metadata Key-Value pairs */}
+                                  {ev.metadata && Object.keys(ev.metadata).length > 0 && (
+                                    <div className="p-3 rounded-xl bg-[#06080B]/60 border border-white/[0.04] flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] font-mono text-[#7A8794]">
+                                      {Object.entries(ev.metadata).map(([key, val]) => (
+                                        <span key={key} className="inline-flex items-center gap-1.5">
+                                          <span className="text-[#4A5560] font-semibold">{key}:</span>
+                                          <span className="text-[#E8ECEF]">{val}</span>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </motion.div>
                         );
                       }
@@ -2119,10 +2181,8 @@ export const InvestigationWorkspace: React.FC<
                             </div>
 
                             {/* Inline tactic name */}
-                            <span className="truncate font-mono text-xs text-[#E8ECEF]">
-                              {viewDetailMode === 'simple'
-                                ? getTacticPlainLanguage(tactic)
-                                : tactic}
+                            <span className="font-mono text-xs text-[#E8ECEF] leading-snug break-words flex-1 min-w-0">
+                              {getTacticPlainLanguage(tactic)}
                             </span>
                           </motion.div>
                         );

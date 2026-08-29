@@ -277,7 +277,7 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
             <span>CORE INVESTIGATION CAPABILITIES IN ACTION</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 relative items-stretch">
+          <div className="grid gap-5 relative" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'stretch' }}>
             {capabilities.map((cap) => {
               const CapIcon = cap.icon;
               return (
@@ -285,12 +285,15 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
                   key={cap.id}
                   id={`capability-card-${cap.id}`}
                   onClick={() => handleLaunchCase(activeCase)}
-                  className="group relative rounded-[20px] p-6 flex flex-col justify-between cursor-pointer transition-all duration-200 h-full"
+                  className="group relative rounded-[20px] p-6 flex flex-col justify-between cursor-pointer"
                   style={{
+                    transition: 'transform 200ms ease, border-color 200ms ease',
                     background: 'rgba(13, 17, 22, 0.55)',
                     backdropFilter: 'blur(18px) saturate(140%)',
                     WebkitBackdropFilter: 'blur(18px) saturate(140%)',
                     border: '1px solid rgba(255, 255, 255, 0.06)',
+                    alignSelf: 'stretch',
+                    minWidth: 0,
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'translateY(-2px)';

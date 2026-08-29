@@ -50,7 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {/* Center Navigation */}
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-[#7A8794]">
+          <nav className="hidden lg:flex items-center gap-8 text-sm font-medium text-[#7A8794]">
             <button
               id="nav-home-btn"
               onClick={() => {
@@ -91,7 +91,7 @@ export const Header: React.FC<HeaderProps> = ({
           </nav>
 
           {/* Right Actions */}
-          <div className="hidden md:flex items-center gap-3 text-sm">
+          <div className="hidden lg:flex items-center gap-3 text-sm">
             <button
               id="nav-signin-btn"
               onClick={() => onOpenModal('signin')}
@@ -114,7 +114,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Mobile menu toggle button */}
-          <div className="flex md:hidden items-center gap-2">
+          <div className="flex lg:hidden items-center gap-2">
             <button
               id="mobile-menu-toggle-btn"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -135,7 +135,7 @@ export const Header: React.FC<HeaderProps> = ({
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="md:hidden border-b border-white/[0.06] bg-[#06080B] px-6 pt-3 pb-6 space-y-2 overflow-hidden"
+            className="lg:hidden border-b border-white/[0.06] bg-[#06080B] px-6 pt-3 pb-6 space-y-2 overflow-hidden"
           >
             <button
               id="mobile-nav-home"

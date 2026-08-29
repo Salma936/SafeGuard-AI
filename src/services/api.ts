@@ -67,7 +67,7 @@ export async function analyzeSuspiciousAudio(audioB64: string, mimeType: string 
     throw new Error('Please select an audio file to analyze.');
   }
 
-  const response = await fetch('/api/analyze/audio', {
+  const response = await fetch('/api/analyze/audio/base64', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ audio_b64: audioB64, mime_type: mimeType })

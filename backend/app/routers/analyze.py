@@ -153,30 +153,58 @@ async def analyze_image_endpoint(request: Request):
 
 
 @router.post("/audio", response_model=InvestigationResultSchema)
-async def analyze_audio_endpoint(
-    file: Optional[UploadFile] = File(None),
-    payload: Optional[AudioAnalysisRequest] = None
+async def analyze_audio_upload_endpoint(
+    file: UploadFile = File(...),
 ):
     """
     POST /api/analyze/audio
     Multimodal audio evidence transcription and coercion detection.
-    Accepts multipart file upload or JSON payload with base64 audio.
+    Accepts multipart file upload only.
     """
     start_time = time.time()
     try:
-        audio_bytes = None
-        mime_type = "audio/mp3"
-
-        if file:
-            audio_bytes = await file.read()
-            mime_type = file.content_type or "audio/mp3"
-        elif payload and payload.audio_b64:
-            clean_b64 = payload.audio_b64.split(",")[-1]
-            audio_bytes = base64.b64decode(clean_b64)
-            mime_type = payload.mime_type or "audio/mp3"
+        audio_bytes = await file.read()
+        mime_type = file.content_type or "audio/mp3"
 
         if not audio_bytes:
-            raise HTTPException(status_code=400, detail="Must provide an audio file upload or audio_b64 string.")
+            raise HTTPException(status_code=400, detail="Must provide an audio file upload.")
+
+        result = ai_service.analyze_audio(audio_bytes, mime_type=mime_type)
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        bigquery_service.log_event(
+            event_name="analysis_completed",
+            incident_id=result.incident_id,
+            threat_type=result.threat_type,
+            risk_level=result.risk_level,
+            confidence=result.confidence,
+            evidence_type="audio",
+            analysis_duration_ms=duration_ms
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=str(err))
+
+
+@router.post("/audio/base64", response_model=InvestigationResultSchema)
+async def analyze_audio_base64_endpoint(
+    payload: AudioAnalysisRequest = Body(...),
+):
+    """
+    POST /api/analyze/audio/base64
+    Multimodal audio evidence transcription and coercion detection.
+    Accepts JSON body with base64-encoded audio (audio_b64, mime_type).
+    """
+    start_time = time.time()
+    try:
+        if not payload.audio_b64:
+            raise HTTPException(status_code=400, detail="Must provide an audio_b64 string.")
+
+        clean_b64 = payload.audio_b64.split(",")[-1]
+        audio_bytes = base64.b64decode(clean_b64)
+        mime_type = payload.mime_type or "audio/mp3"
 
         result = ai_service.analyze_audio(audio_bytes, mime_type=mime_type)
         duration_ms = int((time.time() - start_time) * 1000)
