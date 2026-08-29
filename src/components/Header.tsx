@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowRight, Menu, X, ShieldAlert, Bell } from 'lucide-react';
+import { ArrowRight, Menu, X, ShieldAlert } from 'lucide-react';
 import { ViewMode } from '../types';
 import { LiveStatusIndicator } from './LiveStatusIndicator';
 
@@ -18,7 +18,6 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenModal,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [hasAlert, setHasAlert] = useState(true);
 
   return (
     <header
@@ -94,21 +93,6 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Right Actions */}
           <div className="hidden md:flex items-center gap-3 text-sm">
             <button
-              id="header-notification-bell"
-              onClick={() => {
-                setHasAlert(false);
-                onNavigate('investigate');
-              }}
-              className="relative p-2 rounded-full text-[#7A8794] hover:text-[#E8ECEF] bg-[#0D1116] hover:bg-[#151B22] border border-white/[0.06] transition-colors cursor-pointer"
-              title="Recent Threat Alerts"
-            >
-              <Bell className="w-4 h-4" />
-              {hasAlert && (
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#5FC9E8] shadow-[0_0_8px_rgba(95,201,232,0.8)]" />
-              )}
-            </button>
-
-            <button
               id="nav-signin-btn"
               onClick={() => onOpenModal('signin')}
               className="text-[#7A8794] hover:text-[#E8ECEF] font-medium px-4 py-2 rounded-full hover:bg-white/[0.04] transition-all cursor-pointer"
@@ -117,33 +101,20 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             <button
-              id="nav-get-started-btn"
+              id="nav-analyze-incident-btn"
               onClick={() => onNavigate('investigate')}
               className="bg-[#5FC9E8] hover:bg-[#7be2fe] text-[#0A0D10] font-semibold px-5 py-2 rounded-full transition-all duration-200 inline-flex items-center gap-2 cursor-pointer"
               style={{
                 boxShadow: '0 8px 24px -6px rgba(95, 201, 232, 0.4)',
               }}
             >
-              <span>Get Started</span>
+              <span>Analyze an Incident</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Mobile menu toggle button */}
           <div className="flex md:hidden items-center gap-2">
-            <button
-              onClick={() => {
-                setHasAlert(false);
-                onNavigate('investigate');
-              }}
-              className="relative p-2 rounded-full text-[#7A8794] hover:text-[#E8ECEF] bg-[#0D1116] border border-white/[0.06]"
-            >
-              <Bell className="w-4 h-4" />
-              {hasAlert && (
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#5FC9E8]" />
-              )}
-            </button>
-
             <button
               id="mobile-menu-toggle-btn"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -227,7 +198,7 @@ export const Header: React.FC<HeaderProps> = ({
                 }}
                 className="w-full py-2.5 text-center text-sm font-semibold text-[#0A0D10] bg-[#5FC9E8] rounded-full flex items-center justify-center gap-2 shadow-[0_0_16px_rgba(95,201,232,0.3)] transition-all"
               >
-                <span>Get Started</span>
+                <span>Analyze an Incident</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

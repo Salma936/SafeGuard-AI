@@ -1,6 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
-import { Layers, Network, ShieldCheck, FileSpreadsheet, ArrowUpRight } from 'lucide-react';
+import { Layers, Network, ShieldCheck, FileSpreadsheet, ArrowRight } from 'lucide-react';
 import { ViewMode } from '../types';
 
 interface FeatureSectionProps {
@@ -58,7 +57,6 @@ export const FeatureSection: React.FC<FeatureSectionProps> = ({ onNavigate }) =>
   return (
     <section className="py-16 md:py-24 border-b border-white/[0.06] relative">
       <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 relative">
-        {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-14">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0D1116] text-[#5FC9E8] text-xs font-mono font-bold tracking-wider uppercase mb-3 border border-white/[0.06]">
             <span>CORE CAPABILITIES</span>
@@ -74,7 +72,6 @@ export const FeatureSection: React.FC<FeatureSectionProps> = ({ onNavigate }) =>
           </p>
         </div>
 
-        {/* 4 Capability Glass Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {features.map((feature, idx) => {
             const Icon = feature.icon;
@@ -90,25 +87,8 @@ export const FeatureSection: React.FC<FeatureSectionProps> = ({ onNavigate }) =>
                   WebkitBackdropFilter: 'blur(18px) saturate(140%)',
                   border: '1px solid rgba(255, 255, 255, 0.06)',
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.borderColor = 'rgba(95, 201, 232, 0.25)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0px)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)';
-                }}
               >
-                {/* Large Low-Opacity Monospace Watermark Number in Corner */}
-                <span
-                  className="absolute top-3 right-5 font-mono font-bold text-6xl text-white/[0.04] pointer-events-none select-none tracking-tighter"
-                  aria-hidden="true"
-                >
-                  {feature.num}
-                </span>
-
                 <div>
-                  {/* Top row: Icon */}
                   <div className="flex items-center justify-between mb-6">
                     <div
                       className="w-12 h-12 rounded-xl flex items-center justify-center transition-colors duration-200"
@@ -121,9 +101,8 @@ export const FeatureSection: React.FC<FeatureSectionProps> = ({ onNavigate }) =>
                     </div>
                   </div>
 
-                  {/* Title & Description */}
                   <h3
-                    className="text-xl font-semibold text-[#E8ECEF] tracking-tight mb-2.5 group-hover:text-[#5FC9E8] transition-colors duration-200"
+                    className="text-xl font-semibold text-[#E8ECEF] tracking-tight mb-2.5 transition-colors duration-200"
                     style={{ fontFamily: "'Space Grotesk', sans-serif" }}
                   >
                     {feature.title}
@@ -133,12 +112,11 @@ export const FeatureSection: React.FC<FeatureSectionProps> = ({ onNavigate }) =>
                   </p>
                 </div>
 
-                {/* Bottom capability tag */}
                 <div className="pt-4 border-t border-white/[0.05] flex items-center justify-between text-xs font-medium">
                   <span className="text-[#4A5560] font-mono">{feature.tag}</span>
                   <span className="inline-flex items-center gap-1 text-[#5FC9E8] font-semibold">
-                    <span>Explore in Studio</span>
-                    <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-200" />
+                    <span>Analyze an Incident</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </span>
                 </div>
               </div>

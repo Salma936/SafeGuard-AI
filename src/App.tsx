@@ -9,7 +9,6 @@ import { ViewMode, IncidentCase } from './types';
 import { DEMO_INCIDENTS } from './data/demoIncidents';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
-import { FeatureSection } from './components/FeatureSection';
 import { LiveDemoSection } from './components/LiveDemoSection';
 import { HowItWorks } from './components/HowItWorks';
 import { TrustPrivacySection } from './components/TrustPrivacySection';
@@ -55,7 +54,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#06080B] text-[#E8ECEF] flex flex-col relative selection:bg-[#5FC9E8]/20 selection:text-[#5FC9E8]">
-      {/* Site-wide Ambient Canvas Particle Field and Glow Wash */}
+      {/* Site-wide Ambient Radiating Burst Canvas Background */}
       <AmbientBackground />
 
       <div className="relative z-10 flex flex-col min-h-screen">
@@ -70,24 +69,24 @@ export default function App() {
               />
 
               <main className="flex-1 w-full min-w-0">
+                {/* 1. Hero Section */}
                 <Hero
                   onNavigate={handleNavigate}
                   onScrollToSection={handleScrollToSection}
                 />
 
-                <FeatureSection
-                  onNavigate={handleNavigate}
-                />
-
+                {/* 2. Live Demo / Proof Section (Merged Core Capabilities) */}
                 <LiveDemoSection
                   onNavigate={handleNavigate}
                   onSelectDemoCase={handleSelectDemoCase}
                 />
 
+                {/* 3. How It Works (Single 4-Step Process) */}
                 <HowItWorks
                   onNavigate={handleNavigate}
                 />
 
+                {/* 4. Trust & Privacy (Compact Icon Strip directly above Footer) */}
                 <TrustPrivacySection
                   onNavigate={handleNavigate}
                   onOpenAboutModal={() => setActiveModal('about')}

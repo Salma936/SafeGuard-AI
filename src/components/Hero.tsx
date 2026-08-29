@@ -1,9 +1,9 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Play, MessageSquare, Link2, FileSearch, Mic } from 'lucide-react';
+import { ArrowRight, Play, MessageSquare, Link2, FileSearch, Mic, AlertTriangle, Check, ShieldAlert } from 'lucide-react';
 import { ViewMode } from '../types';
+import { DEMO_INCIDENTS } from '../data/demoIncidents';
 import { LiveStatusIndicator } from './LiveStatusIndicator';
-import { ThreatIndexGauge } from './ThreatIndexGauge';
 
 interface HeroProps {
   onNavigate: (view: ViewMode) => void;
@@ -11,12 +11,14 @@ interface HeroProps {
 }
 
 export const Hero: React.FC<HeroProps> = ({ onNavigate, onScrollToSection }) => {
+  const sampleCase = DEMO_INCIDENTS[0];
+
   return (
-    <section className="relative overflow-hidden pt-8 pb-16 md:py-20 lg:py-24 border-b border-white/[0.06] w-full">
+    <section className="relative overflow-hidden pt-8 pb-14 md:py-18 lg:py-22 border-b border-white/[0.06] w-full">
       <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 relative z-10 w-full">
-        {/* Main Side-by-Side Flex Container (Cross-Browser Safari & Chrome Resilient) */}
-        <div className="flex flex-col lg:flex-row lg:flex-nowrap items-center justify-between gap-10 lg:gap-12 xl:gap-16 w-full min-w-0">
-          {/* Left Column: Human and Accessible Landing Copy */}
+        {/* Main Side-by-Side Flex Container */}
+        <div className="flex flex-col lg:flex-row lg:flex-nowrap items-center justify-between gap-10 lg:gap-12 xl:gap-14 w-full min-w-0">
+          {/* Left Column: Multimodal Image & Audio Deepfake Differentiator Copy */}
           <div className="flex-1 flex flex-col justify-center text-left min-w-0 w-full lg:max-w-2xl">
             {/* Eyebrow badge */}
             <motion.div
@@ -28,7 +30,7 @@ export const Hero: React.FC<HeroProps> = ({ onNavigate, onScrollToSection }) => 
               <div className="inline-flex items-center gap-2 bg-[#0D1116] text-[#5FC9E8] px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide border border-[#5FC9E8]/30 w-fit shadow-[0_0_15px_rgba(95,201,232,0.1)]">
                 <LiveStatusIndicator size="sm" status="active" />
                 <span className="font-mono uppercase text-[11px] font-bold tracking-wider">
-                  AI DIGITAL SAFETY ASSISTANT
+                  AI DIGITAL SAFETY &amp; DEEPFAKE FORENSICS
                 </span>
               </div>
             </motion.div>
@@ -42,7 +44,7 @@ export const Hero: React.FC<HeroProps> = ({ onNavigate, onScrollToSection }) => 
               style={{ fontFamily: "'Space Grotesk', sans-serif" }}
             >
               Something doesn't feel right online?{' '}
-              <span className="block text-[#5FC9E8] mt-1">Let AI investigate it.</span>
+              <span className="block text-[#5FC9E8] mt-1">Let AI investigate the evidence.</span>
             </motion.h1>
 
             {/* Supporting text */}
@@ -56,7 +58,7 @@ export const Hero: React.FC<HeroProps> = ({ onNavigate, onScrollToSection }) => 
               Upload a suspicious message, link, screenshot, or audio. SafeGuard AI analyzes the evidence, reconstructs what happened, and gives you clear steps to protect yourself and recover.
             </motion.p>
 
-            {/* CTAs */}
+            {/* CTAs (Max 2: Primary "Analyze an Incident" + Secondary "Live Demo") */}
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -87,7 +89,7 @@ export const Hero: React.FC<HeroProps> = ({ onNavigate, onScrollToSection }) => 
                 }}
               >
                 <Play className="w-4 h-4 text-[#5FC9E8] fill-[#5FC9E8]" />
-                <span>View Live Demo</span>
+                <span>Live Demo</span>
               </button>
             </motion.div>
 
@@ -102,83 +104,109 @@ export const Hero: React.FC<HeroProps> = ({ onNavigate, onScrollToSection }) => 
                 Analyzes:
               </span>
               <span className="flex items-center gap-1.5 text-[#E8ECEF]">
+                <FileSearch className="w-3.5 h-3.5 text-[#5FC9E8]" /> Screenshots &amp; Photos
+              </span>
+              <span className="text-[#4A5560]">&bull;</span>
+              <span className="flex items-center gap-1.5 text-[#E8ECEF]">
+                <Mic className="w-3.5 h-3.5 text-[#5FC9E8]" /> Audio Clones
+              </span>
+              <span className="text-[#4A5560]">&bull;</span>
+              <span className="flex items-center gap-1.5 text-[#E8ECEF]">
                 <MessageSquare className="w-3.5 h-3.5 text-[#5FC9E8]" /> Messages
               </span>
               <span className="text-[#4A5560]">&bull;</span>
               <span className="flex items-center gap-1.5 text-[#E8ECEF]">
-                <Link2 className="w-3.5 h-3.5 text-[#5FC9E8]" /> Links
-              </span>
-              <span className="text-[#4A5560]">&bull;</span>
-              <span className="flex items-center gap-1.5 text-[#E8ECEF]">
-                <FileSearch className="w-3.5 h-3.5 text-[#5FC9E8]" /> Screenshots
-              </span>
-              <span className="text-[#4A5560]">&bull;</span>
-              <span className="flex items-center gap-1.5 text-[#E8ECEF]">
-                <Mic className="w-3.5 h-3.5 text-[#5FC9E8]" /> Audio
+                <Link2 className="w-3.5 h-3.5 text-[#5FC9E8]" /> URLs
               </span>
             </motion.div>
           </div>
 
-          {/* Right Column: Composite Threat Index Circular Gauge Card (Fixed Width + Shrink-0 for Safari) */}
+          {/* Right Column: Reused Analysis Summary Cards Component (Incident Risk, AI Confidence, Evidence Analyzed) */}
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full lg:w-[420px] xl:w-[440px] shrink-0 flex justify-center lg:justify-end"
+            className="w-full lg:w-[440px] xl:w-[460px] shrink-0 flex justify-center lg:justify-end"
             style={{
               flexShrink: 0,
             }}
           >
             <div
-              className="w-full max-w-md rounded-[24px] p-6 sm:p-7 relative overflow-hidden shrink-0"
+              className="w-full rounded-[24px] p-5 sm:p-6 space-y-4 shadow-xl relative overflow-hidden shrink-0"
               style={{
                 background: 'rgba(13, 17, 22, 0.55)',
                 backdropFilter: 'blur(18px) saturate(140%)',
                 WebkitBackdropFilter: 'blur(18px) saturate(140%)',
                 border: '1px solid rgba(255, 255, 255, 0.06)',
-                width: '100%',
               }}
             >
-              {/* Card Header Bar */}
-              <div className="flex items-center justify-between pb-4 mb-5 border-b border-white/[0.06]">
+              {/* Header Bar */}
+              <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-[#5FC9E8] animate-pulse" />
                   <span className="font-mono text-xs font-semibold tracking-wider text-[#E8ECEF] uppercase">
-                    COMPOSITE THREAT INDEX
+                    LIVE INVESTIGATION SUMMARY
                   </span>
                 </div>
-                <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-[#D9705A]/15 text-[#D9705A] border border-[#D9705A]/25 font-bold">
-                  HIGH RISK
+                <span className="font-mono text-[10.5px] px-2 py-0.5 rounded bg-[#5FC9E8]/10 text-[#5FC9E8] border border-[#5FC9E8]/20 font-bold">
+                  SAMPLE PREVIEW
                 </span>
               </div>
 
-              {/* Animated Circular Gauge */}
-              <div className="py-2 flex justify-center">
-                <ThreatIndexGauge score={84} size={176} radius={70} strokeWidth={10} />
+              {/* 1. Incident Risk Card */}
+              <div className="p-4 bg-[#06080B]/85 rounded-2xl border border-white/[0.06] flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-mono uppercase text-[#7A8794]">Incident Risk</div>
+                  <div className="text-xl font-bold text-[#E8ECEF] flex items-center gap-2 mt-0.5">
+                    <span className="px-2 py-0.5 text-xs font-mono rounded-md bg-[#D9705A]/15 text-[#D9705A] border border-[#D9705A]/25 font-bold">
+                      {sampleCase.overallRisk.toUpperCase()}
+                    </span>
+                    <span className="text-xs font-mono text-[#7A8794] font-normal">
+                      Score: {sampleCase.riskScore}/100
+                    </span>
+                  </div>
+                </div>
+                <AlertTriangle className="w-6 h-6 text-[#D9705A]" />
               </div>
 
-              {/* Quick Telemetry Details */}
-              <div className="mt-5 space-y-2.5 pt-4 border-t border-white/[0.06]">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-[#7A8794] font-mono">Triage Status</span>
-                  <span className="font-mono text-[#5FC9E8] font-semibold">Active Containment</span>
+              {/* 2. AI Confidence Card */}
+              <div className="p-4 bg-[#06080B]/85 rounded-2xl border border-white/[0.06] flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-mono uppercase text-[#7A8794]">AI Confidence</div>
+                  <div className="text-xl font-bold text-[#5FC9E8] font-mono mt-0.5">
+                    94%
+                  </div>
                 </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-[#7A8794] font-mono">Chained Artifacts</span>
-                  <span className="font-mono text-[#E8ECEF] font-bold">4 Verified (SHA-256)</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-[#7A8794] font-mono">Primary Vector</span>
-                  <span className="font-mono text-[#E0A458] font-semibold">Phishing + MFA Fatigue</span>
+                <div className="w-8 h-8 rounded-full bg-[#5FC9E8]/10 border border-[#5FC9E8]/20 flex items-center justify-center text-[#5FC9E8] text-xs font-mono font-bold">
+                  94
                 </div>
               </div>
 
-              {/* Interactive workspace link */}
+              {/* 3. Evidence Analyzed Checklist Card */}
+              <div className="p-4 bg-[#06080B]/85 rounded-2xl border border-white/[0.06] flex flex-col justify-center">
+                <div className="text-[11px] font-mono uppercase text-[#7A8794] mb-1.5">Evidence Analyzed</div>
+                <div className="grid grid-cols-2 gap-2 text-xs text-[#E8ECEF]">
+                  <span className="flex items-center gap-1.5 text-[#5FC9E8] font-medium">
+                    <Check className="w-3.5 h-3.5 text-[#5FC9E8]" /> Message
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[#5FC9E8] font-medium">
+                    <Check className="w-3.5 h-3.5 text-[#5FC9E8]" /> URL
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[#5FC9E8] font-medium">
+                    <Check className="w-3.5 h-3.5 text-[#5FC9E8]" /> Screenshot
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[#5FC9E8] font-medium">
+                    <Check className="w-3.5 h-3.5 text-[#5FC9E8]" /> Audio
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Button: Live Demo */}
               <button
-                onClick={() => onNavigate('investigate')}
-                className="w-full mt-5 py-2.5 text-center text-xs font-semibold text-[#5FC9E8] hover:text-[#8ee1f9] rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.05] flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer"
+                onClick={() => onScrollToSection('live-demo')}
+                className="w-full mt-2 py-2.5 text-center text-xs font-semibold text-[#5FC9E8] hover:text-[#8ee1f9] rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer"
               >
-                <span>Launch Interactive Studio</span>
+                <span>Inspect Full Live Demo</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
