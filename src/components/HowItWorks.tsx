@@ -11,9 +11,9 @@ export const HowItWorks: React.FC<HowItWorksProps> = ({ onNavigate }) => {
     {
       num: '01',
       title: 'Upload Evidence',
-      description: 'Upload suspicious messages, URLs, screenshots, or audio recordings into a secure, sandboxed session.',
+      description: 'Upload suspicious messages, URLs, images,screenshots, audio, or video recordings into a secure, sandboxed session.',
       icon: Upload,
-      tag: 'ACCEPTS SMS, EMAIL, DOMAINS, CHATS, AND AUDIO.',
+      tag: 'ACCEPTS SMS, EMAIL, DOMAINS, CHATS, AUDIO, AND VIDEO.',
     },
     {
       num: '02',

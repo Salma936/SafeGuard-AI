@@ -131,7 +131,8 @@ class IncidentResponseSchema(BaseModel):
 
 class VideoAnalysisRequest(BaseModel):
     video_b64: Optional[str] = None
-    mime_type: Optional[str] = None
+    filename: Optional[str] = "video.mp4"
+    mime_type: Optional[str] = "video/mp4"
 
 
 class DocumentAnalysisRequest(BaseModel):

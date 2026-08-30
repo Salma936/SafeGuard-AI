@@ -20,7 +20,11 @@ import { AnimatedPage } from './components/AnimatedPage';
 import { AmbientBackground } from './components/AmbientBackground';
 
 export default function App() {
-  const [viewMode, setViewMode] = useState<ViewMode>('landing');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const v = params.get('view') as ViewMode;
+    return v === 'investigate' || v === 'live-demo' || v === 'screenshot-analyzer' ? v : 'landing';
+  });
   const [activeModal, setActiveModal] = useState<'about' | 'signin' | 'services' | 'pricing' | 'company' | 'blog' | null>(null);
   const [selectedDemoCase, setSelectedDemoCase] = useState<IncidentCase>(DEMO_INCIDENTS[0]);
 

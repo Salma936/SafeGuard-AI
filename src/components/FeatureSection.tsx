@@ -12,7 +12,7 @@ export const FeatureSection: React.FC<FeatureSectionProps> = ({ onNavigate }) =>
       id: 'feat-1',
       num: '01',
       title: 'Multimodal Investigation',
-      description: 'Analyze messages, URLs, screenshots, images, and audio evidence in one unified investigation.',
+      description: 'Analyze messages, URLs, screenshots, images, audio, and video evidence in one unified investigation.',
       icon: Layers,
       tag: 'Multi-Evidence Ingestion',
       iconColor: '#5FC9E8',

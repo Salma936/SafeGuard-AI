@@ -14,6 +14,7 @@ interface EvidenceConstellationProps {
   evidence?: EvidenceItem[];
   caseTitle?: string;
   className?: string;
+  variant?: 'full' | 'preview';
 }
 
 interface SatelliteNode {
@@ -33,6 +34,7 @@ function EvidenceConstellation({
   evidence = [],
   caseTitle = 'Case Core',
   className = '',
+  variant = 'full',
 }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -50,6 +52,7 @@ function EvidenceConstellation({
       { id: 'ev-2', type: 'url', title: 'Reverse Proxy Link', riskLevel: 'High', riskScore: 88 },
       { id: 'ev-3', type: 'screenshot', title: '2FA Prompt Spam', riskLevel: 'Medium', riskScore: 68 },
       { id: 'ev-4', type: 'audio', title: 'Voicemail Spoof', riskLevel: 'Low', riskScore: 35 },
+      { id: 'ev-5', type: 'video', title: 'Deepfake Cam Feed', riskLevel: 'Critical', riskScore: 84 },
     ] as EvidenceItem[];
   }, [evidence]);
 
@@ -176,7 +179,7 @@ function EvidenceConstellation({
       const cx = width / 2;
       const cy = height / 2 - 6;
 
-      const orbitRadius = Math.min(width, height) * 0.37;
+      const orbitRadius = Math.min(width, height) * (variant === 'preview' ? 0.33 : 0.37);
 
       // 1. Connecting Lines & Hash Verification Packets
       satellites.forEach((sat) => {
@@ -217,15 +220,16 @@ function EvidenceConstellation({
       const coreBreath = prefersReducedMotion
         ? 1
         : 1 + Math.sin((elapsed / 1600) * Math.PI * 2) * 0.12;
-      const coreRadius = 15 * coreBreath;
+      const coreBaseRadius = variant === 'preview' ? 11 : 15;
+      const coreRadius = coreBaseRadius * coreBreath;
 
-      const coreGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 38 * coreBreath);
+      const coreGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, (variant === 'preview' ? 28 : 38) * coreBreath);
       coreGlow.addColorStop(0, 'rgba(95, 201, 232, 0.35)');
       coreGlow.addColorStop(0.5, 'rgba(95, 201, 232, 0.1)');
       coreGlow.addColorStop(1, 'rgba(95, 201, 232, 0)');
       ctx.fillStyle = coreGlow;
       ctx.beginPath();
-      ctx.arc(cx, cy, 38 * coreBreath, 0, Math.PI * 2);
+      ctx.arc(cx, cy, (variant === 'preview' ? 28 : 38) * coreBreath, 0, Math.PI * 2);
       ctx.fill();
 
       const coreFill = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius);
@@ -246,10 +250,10 @@ function EvidenceConstellation({
       ctx.fillStyle = '#FFFFFF';
       ctx.fill();
 
-      ctx.font = '600 11px "JetBrains Mono", monospace';
+      ctx.font = variant === 'preview' ? '600 8.5px "JetBrains Mono", monospace' : '600 11px "JetBrains Mono", monospace';
       ctx.fillStyle = '#E8ECEF';
       ctx.textAlign = 'center';
-      ctx.fillText('CASE CORE', cx, cy + coreRadius + 15);
+      ctx.fillText('CASE CORE', cx, cy + coreRadius + (variant === 'preview' ? 11 : 15));
 
       // 3. Satellite Nodes & Labels
       satellites.forEach((sat) => {
@@ -259,15 +263,15 @@ function EvidenceConstellation({
         const satPulse = prefersReducedMotion
           ? 1
           : 1 + Math.sin((elapsed / 1200) * Math.PI * 2 + sat.pulseOffset) * 0.15;
-        const satRadius = 6.5 * satPulse;
+        const satRadius = (variant === 'preview' ? 4.5 : 6.5) * satPulse;
 
-        const satGlow = ctx.createRadialGradient(sx, sy, 0, sx, sy, 22);
+        const satGlow = ctx.createRadialGradient(sx, sy, 0, sx, sy, variant === 'preview' ? 16 : 22);
         satGlow.addColorStop(0, `${sat.color}55`);
         satGlow.addColorStop(0.6, `${sat.color}15`);
         satGlow.addColorStop(1, `${sat.color}00`);
         ctx.fillStyle = satGlow;
         ctx.beginPath();
-        ctx.arc(sx, sy, 22, 0, Math.PI * 2);
+        ctx.arc(sx, sy, variant === 'preview' ? 16 : 22, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.fillStyle = sat.color;
@@ -279,8 +283,8 @@ function EvidenceConstellation({
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        ctx.font = '500 10px "JetBrains Mono", monospace';
-        const labelText = `${sat.type} · ${sat.status}`;
+        ctx.font = variant === 'preview' ? '500 8.5px "JetBrains Mono", monospace' : '500 10px "JetBrains Mono", monospace';
+        const labelText = variant === 'preview' ? sat.type : `${sat.type} · ${sat.status}`;
 
         const cos = Math.cos(sat.angle);
         const sin = Math.sin(sat.angle);
@@ -301,8 +305,8 @@ function EvidenceConstellation({
         else if (sin < -0.4) labelY = sy - 10;
 
         const textMetrics = ctx.measureText(labelText);
-        const pillWidth = textMetrics.width + 10;
-        const pillHeight = 16;
+        const pillWidth = textMetrics.width + (variant === 'preview' ? 6 : 10);
+        const pillHeight = variant === 'preview' ? 13 : 16;
         let pillX = labelX;
         if (ctx.textAlign === 'center') pillX -= pillWidth / 2;
         else if (ctx.textAlign === 'right') pillX -= pillWidth;
@@ -364,7 +368,9 @@ function EvidenceConstellation({
 
   return (
     <div
-      className={`relative w-full rounded-[20px] glass-panel p-5 overflow-hidden flex flex-col items-center justify-between ${className}`}
+      className={`relative w-full rounded-[20px] glass-panel overflow-hidden flex flex-col items-center justify-between ${
+        variant === 'preview' ? 'p-3.5' : 'p-5'
+      } ${className}`}
       style={{
         background: 'rgba(13, 17, 22, 0.55)',
         backdropFilter: 'blur(18px) saturate(140%)',
@@ -373,20 +379,28 @@ function EvidenceConstellation({
       }}
     >
       {/* Header Info */}
-      <div className="w-full flex items-center justify-between border-b border-white/5 pb-3 mb-2">
-        <div className="flex items-center gap-2">
+      <div className={`w-full flex items-center justify-between border-b border-white/5 ${
+        variant === 'preview' ? 'pb-2 mb-1.5' : 'pb-3 mb-2'
+      }`}>
+        <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-[#5FC9E8] animate-pulse" />
-          <span className="font-mono text-xs font-semibold tracking-wider uppercase text-[#E8ECEF]">
+          <span className={`font-mono font-semibold tracking-wider uppercase text-[#E8ECEF] ${
+            variant === 'preview' ? 'text-[10.5px]' : 'text-xs'
+          }`}>
             EVIDENCE CONSTELLATION
           </span>
         </div>
-        <span className="font-mono text-[11px] text-[#7A8794] px-2 py-0.5 rounded bg-[#06080B]/80 border border-white/5">
-          SHA-256 ACTIVE
+        <span className={`font-mono text-[#7A8794] rounded bg-[#06080B]/80 border border-white/5 ${
+          variant === 'preview' ? 'text-[9.5px] px-1.5 py-0.5' : 'text-[11px] px-2 py-0.5'
+        }`}>
+          {variant === 'preview' ? 'SHA-256' : 'SHA-256 ACTIVE'}
         </span>
       </div>
 
       {/* Live Canvas Graph */}
-      <div className="relative w-full h-[280px] sm:h-[320px] flex items-center justify-center">
+      <div className={`relative w-full flex items-center justify-center ${
+        variant === 'preview' ? 'h-[175px] sm:h-[190px]' : 'h-[280px] sm:h-[320px]'
+      }`}>
         <canvas
           ref={canvasRef}
           className="w-full h-full block"
@@ -394,13 +408,28 @@ function EvidenceConstellation({
       </div>
 
       {/* Bottom Live Caption */}
-      <div className="w-full pt-3 border-t border-white/5 text-center">
-        <p className="font-mono text-[11px] text-[#7A8794] tracking-tight leading-relaxed">
-          live hash verification streaming from case core &bull; SHA-256 chained &bull;{' '}
-          <span className="text-[#5FC9E8] font-bold">
-            {verifiedCount}/{evidenceList.length}
-          </span>{' '}
-          artifacts verified
+      <div className={`w-full border-t border-white/5 text-center ${
+        variant === 'preview' ? 'pt-2' : 'pt-3'
+      }`}>
+        <p className={`font-mono text-[#7A8794] tracking-tight leading-relaxed ${
+          variant === 'preview' ? 'text-[10px]' : 'text-[11px]'
+        }`}>
+          {variant === 'preview' ? (
+            <>
+              <span className="text-[#5FC9E8] font-bold">
+                {verifiedCount}/{evidenceList.length}
+              </span>{' '}
+              artifacts verified &bull; SHA-256 chained
+            </>
+          ) : (
+            <>
+              live hash verification streaming from case core &bull; SHA-256 chained &bull;{' '}
+              <span className="text-[#5FC9E8] font-bold">
+                {verifiedCount}/{evidenceList.length}
+              </span>{' '}
+              artifacts verified
+            </>
+          )}
         </p>
       </div>
     </div>

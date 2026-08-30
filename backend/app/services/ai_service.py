@@ -184,52 +184,43 @@ Do NOT label this URL as malicious solely because it is unusual unless structura
             raise ValueError("Gemini API client unavailable for audio analysis.")
 
     def analyze_video(self, video_bytes: bytes, mime_type: str = "video/mp4", incident_id: Optional[str] = None) -> InvestigationResultSchema:
-        """Analyze video evidence using Google Files API and Gemini."""
+        """Multimodal video evidence deepfake and forensic analysis using inline byte parts."""
         if not video_bytes:
             raise ValueError("Video content cannot be empty.")
-            
-        import tempfile
-        import os
-        
+
         inc_id = incident_id or f"inc-{uuid.uuid4().hex[:8]}"
-        
+
+        clean_mime = (mime_type or "video/mp4").lower()
+        if "quicktime" in clean_mime or clean_mime.endswith(".mov"):
+            clean_mime = "video/quicktime"
+        elif "webm" in clean_mime:
+            clean_mime = "video/webm"
+        elif "mp4" in clean_mime:
+            clean_mime = "video/mp4"
+        else:
+            clean_mime = "video/mp4"
+
         if self.client and GENAI_SDK_AVAILABLE:
-            # Determine appropriate extension from mime type
-            ext = ".mp4"
-            if "webm" in mime_type:
-                ext = ".webm"
-            elif "avi" in mime_type:
-                ext = ".avi"
-                
-            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as temp_file:
-                temp_file.write(video_bytes)
-                temp_path = temp_file.name
-                
-            try:
-                # Upload using Google GenAI SDK Files API
-                file_ref = self.client.files.upload(file=temp_path)
-                
-                # Wait for file processing
-                while file_ref.state.name == "PROCESSING":
-                    time.sleep(2)
-                    file_ref = self.client.files.get(name=file_ref.name)
-                    
-                if file_ref.state.name == "FAILED":
-                    raise ValueError("Video processing on Gemini Files API failed.")
-                    
-                prompt = f"Incident ID: {inc_id}\nAnalyze this uploaded video evidence for social engineering, malicious interfaces, fake login screens, coercive behavior, and threat indicators. Analyze both the visual frames and any audio/speech."
-                raw_json = self._call_gemini([file_ref, prompt])
-                
-                # Cleanup uploaded file from API
-                try:
-                    self.client.files.delete(name=file_ref.name)
-                except Exception:
-                    pass
-                    
-                return self._parse_and_sanitize(raw_json, inc_id, fallback_threat="Scam")
-            finally:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
+            part = types.Part.from_bytes(data=video_bytes, mime_type=clean_mime)
+            prompt = (
+                f"Incident ID: {inc_id}\n"
+                "You are an expert digital safety and media forensics investigator specializing in deepfake, synthetic media, and video manipulation detection.\n"
+                "Examine this uploaded video recording across both its visual stream and audio track.\n"
+                "Specifically investigate and report on:\n"
+                "1. Facial movement consistency: naturalness of blinking, gaze fixation, unnatural micro-expression freezes, or edge warping.\n"
+                "2. Audio-visual synchronization: phoneme-viseme alignment, speech cadence, and mouth movement latency.\n"
+                "3. Generative and morphing artifacts: boundary blurring along jawline/neck, lighting discontinuities, or resolution mismatches.\n"
+                "4. Temporal coherence: frame-to-frame stability, optical flow anomalies, or phase distortion across sequence cuts.\n"
+                "5. Voice cloning and synthetic audio: presence of neural text-to-speech artifacts, robotic pitch contours, or impersonation lures.\n"
+                "Provide a rigorous analysis with:\n"
+                "- risk_score (0 to 100, where >=75 indicates high confidence deepfake/coercion, <35 indicates authentic/unmanipulated)\n"
+                "- risk_level ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')\n"
+                "- threat_type (e.g., 'Deepfake Video Manipulation', 'Synthetic Media Impersonation', 'Coercive Media', or 'Authentic Media')\n"
+                "- warning_signs (list specific forensic findings with observed frame cues, audio sync latency, or visual artifacts)\n"
+                "- explanation and explanation_simple summarizing the verdict clearly for the user."
+            )
+            raw_json = self._call_gemini([part, prompt])
+            return self._parse_and_sanitize(raw_json, inc_id, fallback_threat="Deepfake Video Manipulation")
         else:
             raise ValueError("Gemini API client unavailable for video analysis.")
 

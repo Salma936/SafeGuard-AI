@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   FileSearch,
   ShieldAlert,
   ArrowRight,
@@ -44,6 +45,9 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
   const [expandedTimelineIds, setExpandedTimelineIds] = useState<Record<string, boolean>>({});
   const [expandedActionTechIds, setExpandedActionTechIds] = useState<Record<string, boolean>>({});
   const [completedActions, setCompletedActions] = useState<Record<string, boolean>>({});
+  const [isReconstructionExpanded, setIsReconstructionExpanded] = useState(false);
+  const [isActionsExpanded, setIsActionsExpanded] = useState(false);
+  const [showAllWarningSigns, setShowAllWarningSigns] = useState(false);
 
   const activeCase = DEMO_INCIDENTS[selectedCaseIdx] || DEMO_INCIDENTS[0];
 
@@ -72,9 +76,9 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
       id: 'cap-1',
       title: 'Multimodal Investigation',
       tag: 'Multi-Evidence Ingestion',
-      description: 'Analyze messages, URLs, screenshots, images, and audio evidence in one unified investigation.',
+      description: 'Analyze messages, URLs, screenshots, images, audio, and video evidence in one unified investigation.',
       icon: Layers,
-      proofLabel: 'Proven by Evidence Analysis below',
+      proofLabel: 'Proven by Multimodal Investigation',
     },
     {
       id: 'cap-2',
@@ -435,6 +439,9 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
                     <span className="flex items-center gap-1 text-[#5FC9E8] font-medium">
                       <Check className="w-3 h-3 text-[#5FC9E8]" /> Audio
                     </span>
+                    <span className="flex items-center gap-1 text-[#5FC9E8] font-medium">
+                      <Check className="w-3 h-3 text-[#5FC9E8]" /> Video
+                    </span>
                   </div>
                 </div>
               </div>
@@ -447,10 +454,17 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
                   <div className="bg-[#06080B]/85 rounded-2xl p-5 border border-white/[0.06] space-y-4">
                     {/* Header + View Toggle (Timeline View / Graph View) */}
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
-                      <span className="text-xs font-mono uppercase text-[#E8ECEF] font-semibold flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsReconstructionExpanded((prev) => !prev)}
+                        className="text-xs font-mono uppercase text-[#E8ECEF] font-semibold flex items-center gap-1.5 cursor-pointer"
+                      >
                         <Activity className="w-3.5 h-3.5 text-[#5FC9E8]" />
                         <span>Incident Reconstruction</span>
-                      </span>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 text-[#5FC9E8] transition-transform ${isReconstructionExpanded ? 'rotate-180' : ''}`}
+                        />
+                      </button>
 
                       {/* Compact Segmented Control Toggle */}
                       <div className="inline-flex items-center gap-1 bg-[#0D1116] p-1 rounded-xl border border-white/[0.08]">
@@ -486,259 +500,273 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
                       </div>
                     </div>
 
-                    {/* View Content: Timeline vs Graph */}
-                    {timelineViewMode === 'timeline' ? (
-                      /* 1. Existing Timeline View (Preserved 100% Intact as Default) */
-                      <div className="space-y-3.5 relative pl-1">
-                        {activeCase.timeline.map((event, idx) => {
-                          const isHigh = event.severity === 'high' || event.severity === 'critical';
-                          const isMed = event.severity === 'medium';
-                          const semanticColor = isHigh ? '#D9705A' : isMed ? '#E0A458' : '#5FC9E8';
-                          const EventIcon = getTimelineEventIcon(event);
-                          const isExpanded = !!expandedTimelineIds[event.id || String(idx)];
+                    <AnimatePresence>
+                      {isReconstructionExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.25 }}
+                          className="overflow-hidden"
+                        >
 
-                          return (
-                            <motion.div
-                              key={event.id || idx}
-                              initial={{ opacity: 0, x: -8 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ duration: 0.35, delay: idx * 0.08 }}
-                              className="relative pl-6 pb-2 last:pb-0 border-l border-white/[0.08]"
-                            >
-                              {/* Semantic Color Icon Node */}
-                              <div
-                                className="absolute -left-3 top-0.5 w-6 h-6 rounded-full flex items-center justify-center border-2 border-[#06080B]"
-                                style={{
-                                  backgroundColor: `${semanticColor}20`,
-                                  color: semanticColor,
-                                  borderColor: semanticColor,
-                                  boxShadow: isHigh ? `0 0 10px ${semanticColor}80` : 'none',
-                                }}
-                              >
-                                <EventIcon className="w-3 h-3" />
-                              </div>
+                          {/* View Content: Timeline vs Graph */}
+                          {timelineViewMode === 'timeline' ? (
+                            /* 1. Existing Timeline View (Preserved 100% Intact as Default) */
+                            <div className="space-y-3.5 relative pl-6 pr-2 pt-2.5 pb-1">
+                              {activeCase.timeline.map((event, idx) => {
+                                const isHigh = event.severity === 'high' || event.severity === 'critical';
+                                const isMed = event.severity === 'medium';
+                                const semanticColor = isHigh ? '#D9705A' : isMed ? '#E0A458' : '#5FC9E8';
+                                const EventIcon = getTimelineEventIcon(event);
+                                const isExpanded = !!expandedTimelineIds[event.id || String(idx)];
 
-                              {/* Stepper Header: Timestamp + Title */}
-                              <div className="flex items-center justify-between gap-2 min-w-0">
-                                <span
-                                  className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0"
-                                  style={{
-                                    backgroundColor: `${semanticColor}15`,
-                                    color: semanticColor,
-                                  }}
-                                >
-                                  {event.timestamp}
-                                </span>
-                                <button
-                                  onClick={() => toggleTimelineDetails(event.id || String(idx))}
-                                  className="text-[10.5px] font-mono text-[#5FC9E8] hover:text-[#8ee1f9] flex items-center gap-0.5 cursor-pointer"
-                                >
-                                  <span>{isExpanded ? 'Hide' : 'Details'}</span>
-                                  <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                                </button>
-                              </div>
-
-                              <div className="text-xs font-semibold text-[#E8ECEF] mt-1 break-words">
-                                {event.title}
-                              </div>
-
-                              {/* Expandable Explanation Details */}
-                              {isExpanded && (
-                                <motion.div
-                                  initial={{ opacity: 0, height: 0 }}
-                                  animate={{ opacity: 1, height: 'auto' }}
-                                  exit={{ opacity: 0, height: 0 }}
-                                  className="text-[11px] text-[#7A8794] leading-relaxed mt-1.5 pt-1.5 border-t border-white/[0.04] break-words"
-                                >
-                                  {event.description}
-                                </motion.div>
-                              )}
-                            </motion.div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      /* 2. Additive Incident Graph View */
-                      <div className="space-y-4">
-                        {/* Interactive Graph Chain */}
-                        <div className="p-3 sm:p-4 rounded-xl bg-[#06080B] border border-white/[0.06] relative overflow-hidden">
-                          <div className="text-[10px] font-mono uppercase text-[#7A8794] mb-3 flex items-center justify-between">
-                            <span>CAUSAL INCIDENT CHAIN</span>
-                            <span className="text-[#5FC9E8]">Click node for details</span>
-                          </div>
-
-                          {/* Desktop & Tablet: Horizontal Connected Flow */}
-                          <div className="hidden sm:flex items-center justify-between gap-2 relative">
-                            {activeCase.timeline.map((event, idx) => {
-                              const isHigh = event.severity === 'high' || event.severity === 'critical';
-                              const isMed = event.severity === 'medium';
-                              const semanticColor = isHigh ? '#D9705A' : isMed ? '#E0A458' : '#5FC9E8';
-                              const EventIcon = getTimelineEventIcon(event);
-                              const warningBadge = getEventWarningSign(event);
-                              const nodeId = event.id || String(idx);
-                              const isSelected = selectedGraphNodeId === nodeId || (!selectedGraphNodeId && idx === 0);
-
-                              return (
-                                <React.Fragment key={nodeId}>
-                                  {/* Event Node */}
-                                  <motion.button
-                                    type="button"
-                                    onClick={() => setSelectedGraphNodeId(nodeId)}
-                                    initial={{ opacity: 0, scale: 0.9 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    transition={{ duration: 0.25, delay: idx * 0.07 }}
-                                    className={`relative flex-1 p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between min-h-[92px] ${isSelected
-                                      ? 'bg-[#151B22] shadow-[0_0_15px_rgba(95,201,232,0.15)]'
-                                      : 'bg-[#0D1116]/80 hover:bg-[#0D1116] border-white/[0.06]'
-                                      }`}
-                                    style={{
-                                      borderColor: isSelected ? semanticColor : 'rgba(255, 255, 255, 0.08)',
-                                    }}
+                                return (
+                                  <motion.div
+                                    key={event.id || idx}
+                                    initial={{ opacity: 0, x: -8 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ duration: 0.35, delay: idx * 0.08 }}
+                                    className="relative pl-6 pb-2 last:pb-0 border-l border-white/[0.08]"
                                   >
-                                    {/* Top Row: Icon + Timestamp + Warning Badge */}
-                                    <div className="flex items-center justify-between gap-1 mb-1.5">
-                                      <div
-                                        className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border"
-                                        style={{
-                                          backgroundColor: `${semanticColor}20`,
-                                          color: semanticColor,
-                                          borderColor: `${semanticColor}40`,
-                                        }}
-                                      >
-                                        <EventIcon className="w-3 h-3" />
-                                      </div>
-
-                                      <div className="flex items-center gap-1">
-                                        {warningBadge && (
-                                          <div
-                                            className="w-4 h-4 rounded-full bg-[#D9705A]/20 border border-[#D9705A]/40 flex items-center justify-center text-[#D9705A]"
-                                            title={`Warning sign: ${warningBadge}`}
-                                          >
-                                            <AlertTriangle className="w-2.5 h-2.5" />
-                                          </div>
-                                        )}
-                                        <span className="text-[10px] font-mono text-[#7A8794]">
-                                          {event.timestamp}
-                                        </span>
-                                      </div>
+                                    {/* Semantic Color Icon Node */}
+                                    <div
+                                      className="absolute -left-3 top-0.5 w-6 h-6 rounded-full flex items-center justify-center border-2 border-[#06080B]"
+                                      style={{
+                                        backgroundColor: `${semanticColor}20`,
+                                        color: semanticColor,
+                                        borderColor: semanticColor,
+                                        boxShadow: isHigh ? `0 0 10px ${semanticColor}80` : 'none',
+                                      }}
+                                    >
+                                      <EventIcon className="w-3 h-3" />
                                     </div>
 
-                                    {/* Event Title */}
-                                    <div className="text-[11px] font-semibold text-[#E8ECEF] line-clamp-2 leading-tight">
+                                    {/* Stepper Header: Timestamp + Title */}
+                                    <div className="flex items-center justify-between gap-2 min-w-0">
+                                      <span
+                                        className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0"
+                                        style={{
+                                          backgroundColor: `${semanticColor}15`,
+                                          color: semanticColor,
+                                        }}
+                                      >
+                                        {event.timestamp}
+                                      </span>
+                                      <button
+                                        onClick={() => toggleTimelineDetails(event.id || String(idx))}
+                                        className="text-[10.5px] font-mono text-[#5FC9E8] hover:text-[#8ee1f9] flex items-center gap-0.5 cursor-pointer"
+                                      >
+                                        <span>{isExpanded ? 'Hide' : 'Details'}</span>
+                                        <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                      </button>
+                                    </div>
+
+                                    <div className="text-xs font-semibold text-[#E8ECEF] mt-1 break-words">
                                       {event.title}
                                     </div>
-                                  </motion.button>
 
-                                  {/* Connector Arrow to next event */}
-                                  {idx < activeCase.timeline.length - 1 && (
-                                    <div className="shrink-0 flex items-center justify-center text-[#4A5560]">
-                                      <ArrowRight className="w-3.5 h-3.5 text-[#5FC9E8]/50" />
-                                    </div>
-                                  )}
-                                </React.Fragment>
-                              );
-                            })}
-                          </div>
-
-                          {/* Mobile View: Vertical Connected Flow */}
-                          <div className="flex sm:hidden flex-col space-y-2">
-                            {activeCase.timeline.map((event, idx) => {
-                              const isHigh = event.severity === 'high' || event.severity === 'critical';
-                              const isMed = event.severity === 'medium';
-                              const semanticColor = isHigh ? '#D9705A' : isMed ? '#E0A458' : '#5FC9E8';
-                              const EventIcon = getTimelineEventIcon(event);
-                              const warningBadge = getEventWarningSign(event);
-                              const nodeId = event.id || String(idx);
-                              const isSelected = selectedGraphNodeId === nodeId || (!selectedGraphNodeId && idx === 0);
-
-                              return (
-                                <React.Fragment key={nodeId}>
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedGraphNodeId(nodeId)}
-                                    className={`w-full p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between gap-2.5 ${isSelected
-                                      ? 'bg-[#151B22] shadow-xs'
-                                      : 'bg-[#0D1116]/80 hover:bg-[#0D1116] border-white/[0.06]'
-                                      }`}
-                                    style={{
-                                      borderColor: isSelected ? semanticColor : 'rgba(255, 255, 255, 0.08)',
-                                    }}
-                                  >
-                                    <div className="flex items-center gap-2.5 min-w-0">
-                                      <div
-                                        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border"
-                                        style={{
-                                          backgroundColor: `${semanticColor}20`,
-                                          color: semanticColor,
-                                          borderColor: `${semanticColor}40`,
-                                        }}
+                                    {/* Expandable Explanation Details */}
+                                    {isExpanded && (
+                                      <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        className="text-[11px] text-[#7A8794] leading-relaxed mt-1.5 pt-1.5 border-t border-white/[0.04] break-words"
                                       >
-                                        <EventIcon className="w-3.5 h-3.5" />
-                                      </div>
-
-                                      <div className="min-w-0">
-                                        <div className="text-[11.5px] font-semibold text-[#E8ECEF] truncate">
-                                          {event.title}
-                                        </div>
-                                        <div className="text-[10px] font-mono text-[#7A8794]">
-                                          {event.timestamp} &bull; Phase: {event.phase}
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {warningBadge && (
-                                      <div
-                                        className="shrink-0 px-1.5 py-0.5 rounded bg-[#D9705A]/15 border border-[#D9705A]/30 text-[#D9705A] text-[9.5px] font-mono flex items-center gap-1"
-                                      >
-                                        <AlertTriangle className="w-2.5 h-2.5" />
-                                        <span>Warning</span>
-                                      </div>
+                                        {event.description}
+                                      </motion.div>
                                     )}
-                                  </button>
+                                  </motion.div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            /* 2. Additive Incident Graph View */
+                            <div className="space-y-4">
+                              {/* Interactive Graph Chain */}
+                              <div className="p-3 sm:p-4 rounded-xl bg-[#06080B] border border-white/[0.06] relative overflow-hidden">
+                                <div className="text-[10px] font-mono uppercase text-[#7A8794] mb-3 flex items-center justify-between">
+                                  <span>CAUSAL INCIDENT CHAIN</span>
+                                  <span className="text-[#5FC9E8]">Click node for details</span>
+                                </div>
 
-                                  {idx < activeCase.timeline.length - 1 && (
-                                    <div className="flex justify-center py-0.5 text-[#5FC9E8]/40">
-                                      <ArrowDown className="w-3 h-3" />
+                                {/* Desktop & Tablet: Horizontal Connected Flow */}
+                                <div className="hidden sm:flex items-center justify-between gap-2 relative">
+                                  {activeCase.timeline.map((event, idx) => {
+                                    const isHigh = event.severity === 'high' || event.severity === 'critical';
+                                    const isMed = event.severity === 'medium';
+                                    const semanticColor = isHigh ? '#D9705A' : isMed ? '#E0A458' : '#5FC9E8';
+                                    const EventIcon = getTimelineEventIcon(event);
+                                    const warningBadge = getEventWarningSign(event);
+                                    const nodeId = event.id || String(idx);
+                                    const isSelected = selectedGraphNodeId === nodeId || (!selectedGraphNodeId && idx === 0);
+
+                                    return (
+                                      <React.Fragment key={nodeId}>
+                                        {/* Event Node */}
+                                        <motion.button
+                                          type="button"
+                                          onClick={() => setSelectedGraphNodeId(nodeId)}
+                                          initial={{ opacity: 0, scale: 0.9 }}
+                                          animate={{ opacity: 1, scale: 1 }}
+                                          transition={{ duration: 0.25, delay: idx * 0.07 }}
+                                          className={`relative flex-1 p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between min-h-[92px] ${isSelected
+                                            ? 'bg-[#151B22] shadow-[0_0_15px_rgba(95,201,232,0.15)]'
+                                            : 'bg-[#0D1116]/80 hover:bg-[#0D1116] border-white/[0.06]'
+                                            }`}
+                                          style={{
+                                            borderColor: isSelected ? semanticColor : 'rgba(255, 255, 255, 0.08)',
+                                          }}
+                                        >
+                                          {/* Top Row: Icon + Timestamp + Warning Badge */}
+                                          <div className="flex items-center justify-between gap-1 mb-1.5">
+                                            <div
+                                              className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border"
+                                              style={{
+                                                backgroundColor: `${semanticColor}20`,
+                                                color: semanticColor,
+                                                borderColor: `${semanticColor}40`,
+                                              }}
+                                            >
+                                              <EventIcon className="w-3 h-3" />
+                                            </div>
+
+                                            <div className="flex items-center gap-1">
+                                              {warningBadge && (
+                                                <div
+                                                  className="w-4 h-4 rounded-full bg-[#D9705A]/20 border border-[#D9705A]/40 flex items-center justify-center text-[#D9705A]"
+                                                  title={`Warning sign: ${warningBadge}`}
+                                                >
+                                                  <AlertTriangle className="w-2.5 h-2.5" />
+                                                </div>
+                                              )}
+                                              <span className="text-[10px] font-mono text-[#7A8794]">
+                                                {event.timestamp}
+                                              </span>
+                                            </div>
+                                          </div>
+
+                                          {/* Event Title */}
+                                          <div className="text-[11px] font-semibold text-[#E8ECEF] line-clamp-2 leading-tight">
+                                            {event.title}
+                                          </div>
+                                        </motion.button>
+
+                                        {/* Connector Arrow to next event */}
+                                        {idx < activeCase.timeline.length - 1 && (
+                                          <div className="shrink-0 flex items-center justify-center text-[#4A5560]">
+                                            <ArrowRight className="w-3.5 h-3.5 text-[#5FC9E8]/50" />
+                                          </div>
+                                        )}
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                </div>
+
+                                {/* Mobile View: Vertical Connected Flow */}
+                                <div className="flex sm:hidden flex-col space-y-2">
+                                  {activeCase.timeline.map((event, idx) => {
+                                    const isHigh = event.severity === 'high' || event.severity === 'critical';
+                                    const isMed = event.severity === 'medium';
+                                    const semanticColor = isHigh ? '#D9705A' : isMed ? '#E0A458' : '#5FC9E8';
+                                    const EventIcon = getTimelineEventIcon(event);
+                                    const warningBadge = getEventWarningSign(event);
+                                    const nodeId = event.id || String(idx);
+                                    const isSelected = selectedGraphNodeId === nodeId || (!selectedGraphNodeId && idx === 0);
+
+                                    return (
+                                      <React.Fragment key={nodeId}>
+                                        <button
+                                          type="button"
+                                          onClick={() => setSelectedGraphNodeId(nodeId)}
+                                          className={`w-full p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between gap-2.5 ${isSelected
+                                            ? 'bg-[#151B22] shadow-xs'
+                                            : 'bg-[#0D1116]/80 hover:bg-[#0D1116] border-white/[0.06]'
+                                            }`}
+                                          style={{
+                                            borderColor: isSelected ? semanticColor : 'rgba(255, 255, 255, 0.08)',
+                                          }}
+                                        >
+                                          <div className="flex items-center gap-2.5 min-w-0">
+                                            <div
+                                              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border"
+                                              style={{
+                                                backgroundColor: `${semanticColor}20`,
+                                                color: semanticColor,
+                                                borderColor: `${semanticColor}40`,
+                                              }}
+                                            >
+                                              <EventIcon className="w-3.5 h-3.5" />
+                                            </div>
+
+                                            <div className="min-w-0">
+                                              <div className="text-[11.5px] font-semibold text-[#E8ECEF] truncate">
+                                                {event.title}
+                                              </div>
+                                              <div className="text-[10px] font-mono text-[#7A8794]">
+                                                {event.timestamp} &bull; Phase: {event.phase}
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {warningBadge && (
+                                            <div
+                                              className="shrink-0 px-1.5 py-0.5 rounded bg-[#D9705A]/15 border border-[#D9705A]/30 text-[#D9705A] text-[9.5px] font-mono flex items-center gap-1"
+                                            >
+                                              <AlertTriangle className="w-2.5 h-2.5" />
+                                              <span>Warning</span>
+                                            </div>
+                                          )}
+                                        </button>
+
+                                        {idx < activeCase.timeline.length - 1 && (
+                                          <div className="flex justify-center py-0.5 text-[#5FC9E8]/40">
+                                            <ArrowDown className="w-3 h-3" />
+                                          </div>
+                                        )}
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Selected Node Details Panel */}
+                              {selectedGraphEvent && (
+                                <motion.div
+                                  key={selectedGraphEvent.id}
+                                  initial={{ opacity: 0, y: 4 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  className="p-3.5 rounded-xl bg-[#0D1116] border border-white/[0.08] space-y-1.5"
+                                >
+                                  <div className="flex items-center justify-between text-xs font-semibold text-[#E8ECEF]">
+                                    <span className="flex items-center gap-1.5 text-[#5FC9E8]">
+                                      <Info className="w-3.5 h-3.5" />
+                                      <span>{selectedGraphEvent.title}</span>
+                                    </span>
+                                    <span className="text-[10px] font-mono text-[#7A8794]">
+                                      {selectedGraphEvent.timestamp} ({selectedGraphEvent.phase})
+                                    </span>
+                                  </div>
+
+                                  <p className="text-[11.5px] text-[#7A8794] leading-relaxed">
+                                    {selectedGraphEvent.description}
+                                  </p>
+
+                                  {getEventWarningSign(selectedGraphEvent) && (
+                                    <div className="mt-1.5 pt-1.5 border-t border-white/[0.04] text-[10.5px] font-mono text-[#D9705A] flex items-center gap-1.5">
+                                      <AlertTriangle className="w-3 h-3 shrink-0" />
+                                      <span>Associated Warning Sign: {getEventWarningSign(selectedGraphEvent)}</span>
                                     </div>
                                   )}
-                                </React.Fragment>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* Selected Node Details Panel */}
-                        {selectedGraphEvent && (
-                          <motion.div
-                            key={selectedGraphEvent.id}
-                            initial={{ opacity: 0, y: 4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="p-3.5 rounded-xl bg-[#0D1116] border border-white/[0.08] space-y-1.5"
-                          >
-                            <div className="flex items-center justify-between text-xs font-semibold text-[#E8ECEF]">
-                              <span className="flex items-center gap-1.5 text-[#5FC9E8]">
-                                <Info className="w-3.5 h-3.5" />
-                                <span>{selectedGraphEvent.title}</span>
-                              </span>
-                              <span className="text-[10px] font-mono text-[#7A8794]">
-                                {selectedGraphEvent.timestamp} ({selectedGraphEvent.phase})
-                              </span>
+                                </motion.div>
+                              )}
                             </div>
+                          )}
 
-                            <p className="text-[11.5px] text-[#7A8794] leading-relaxed">
-                              {selectedGraphEvent.description}
-                            </p>
-
-                            {getEventWarningSign(selectedGraphEvent) && (
-                              <div className="mt-1.5 pt-1.5 border-t border-white/[0.04] text-[10.5px] font-mono text-[#D9705A] flex items-center gap-1.5">
-                                <AlertTriangle className="w-3 h-3 shrink-0" />
-                                <span>Associated Warning Sign: {getEventWarningSign(selectedGraphEvent)}</span>
-                              </div>
-                            )}
-                          </motion.div>
-                        )}
-                      </div>
-                    )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
                   {/* Detected Warning Signs */}
@@ -750,8 +778,13 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
                       </span>
                     </div>
 
-                    <div className="space-y-2">
-                      {activeCase.synthesis.tacticsObserved.map((tactic, idx) => {
+                    {(() => {
+                      const allTactics = activeCase.synthesis.tacticsObserved;
+                      const initialTactics = allTactics.slice(0, 1);
+                      const extraTactics = allTactics.slice(1);
+                      const hiddenCount = extraTactics.length;
+
+                      const renderTacticItem = (tactic: string, idx: number) => {
                         const parsed = getWarningSignPlainLanguage(tactic);
                         return (
                           <div
@@ -769,8 +802,52 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
                             </div>
                           </div>
                         );
-                      })}
-                    </div>
+                      };
+
+                      return (
+                        <div className="space-y-2">
+                          <div className="space-y-2">
+                            {initialTactics.map((tactic, idx) => renderTacticItem(tactic, idx))}
+                          </div>
+
+                          <AnimatePresence initial={false}>
+                            {showAllWarningSigns && (
+                              <motion.div
+                                key="extra-warning-signs"
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.25 }}
+                                className="space-y-2 overflow-hidden"
+                              >
+                                {extraTactics.map((tactic, idx) => renderTacticItem(tactic, idx + 1))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          {hiddenCount > 0 && (
+                            <div className="pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setShowAllWarningSigns((prev) => !prev)}
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#5FC9E8] hover:text-[#7be2fe] transition-colors cursor-pointer py-1 px-2 -ml-2 rounded-lg hover:bg-white/[0.04]"
+                              >
+                                <span>
+                                  {showAllWarningSigns
+                                    ? 'Show less'
+                                    : `Show ${hiddenCount} more`}
+                                </span>
+                                {showAllWarningSigns ? (
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                ) : (
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -778,96 +855,115 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
                 <div className="lg:col-span-6 space-y-6">
                   <div className="bg-[#06080B]/85 rounded-2xl p-5 border border-white/[0.06] space-y-4">
                     <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-                      <span className="text-xs font-mono uppercase text-[#E8ECEF] font-semibold flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsActionsExpanded((prev) => !prev)}
+                        className="text-xs font-mono uppercase text-[#E8ECEF] font-semibold flex items-center gap-1.5 cursor-pointer"
+                      >
                         <CheckCircle2 className="w-3.5 h-3.5 text-[#5FC9E8]" />
                         <span>Recommended Actions</span>
-                      </span>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 text-[#5FC9E8] transition-transform ${isActionsExpanded ? 'rotate-180' : ''}`}
+                        />
+                      </button>
                       <span className="text-xs text-[#5FC9E8] font-mono">Priority Checklist</span>
                     </div>
 
-                    <div className="space-y-3">
-                      {activeCase.actionPlan.map((act, idx) => {
-                        const custom = getActionCustomData(idx);
-                        const ActionIcon = custom.icon;
-                        const actionId = act.id || String(idx);
-                        const isDone = !!completedActions[actionId];
-                        const showTech = !!expandedActionTechIds[actionId];
+                    <AnimatePresence>
+                      {isActionsExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.25 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="space-y-3 p-1">
+                            {activeCase.actionPlan.map((act, idx) => {
+                              const custom = getActionCustomData(idx);
+                              const ActionIcon = custom.icon;
+                              const actionId = act.id || String(idx);
+                              const isDone = !!completedActions[actionId];
+                              const showTech = !!expandedActionTechIds[actionId];
 
-                        return (
-                          <div
-                            key={actionId}
-                            className={`p-3.5 rounded-2xl border transition-all ${isDone
-                              ? 'bg-[#5FC9E8]/5 border-[#5FC9E8]/30'
-                              : 'bg-[#0D1116]/80 border-white/[0.06]'
-                              }`}
-                          >
-                            <div className="flex items-start gap-3">
-                              {/* Checkable Circle / Stepper Icon */}
-                              <button
-                                type="button"
-                                onClick={() => toggleActionCheck(actionId)}
-                                className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 cursor-pointer transition-colors"
-                                style={{
-                                  backgroundColor: isDone ? '#5FC9E8' : 'rgba(95, 201, 232, 0.12)',
-                                  color: isDone ? '#0A0D10' : '#5FC9E8',
-                                  border: `1px solid ${isDone ? '#5FC9E8' : 'rgba(95, 201, 232, 0.3)'}`,
-                                }}
-                                title="Mark as completed"
-                              >
-                                {isDone ? <Check className="w-4 h-4 stroke-[3]" /> : <ActionIcon className="w-3.5 h-3.5" />}
-                              </button>
+                              return (
+                                <div
+                                  key={actionId}
+                                  className={`p-3.5 rounded-2xl border transition-all ${isDone
+                                    ? 'bg-[#5FC9E8]/5 border-[#5FC9E8]/30'
+                                    : 'bg-[#0D1116]/80 border-white/[0.06]'
+                                    }`}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    {/* Checkable Circle / Stepper Icon */}
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleActionCheck(actionId)}
+                                      className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 cursor-pointer transition-colors"
+                                      style={{
+                                        backgroundColor: isDone ? '#5FC9E8' : 'rgba(95, 201, 232, 0.12)',
+                                        color: isDone ? '#0A0D10' : '#5FC9E8',
+                                        border: `1px solid ${isDone ? '#5FC9E8' : 'rgba(95, 201, 232, 0.3)'}`,
+                                      }}
+                                      title="Mark as completed"
+                                    >
+                                      {isDone ? <Check className="w-4 h-4 stroke-[3]" /> : <ActionIcon className="w-3.5 h-3.5" />}
+                                    </button>
 
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between gap-2">
-                                  {/* Urgency Tag */}
-                                  <span
-                                    className="text-[10px] font-mono font-bold uppercase px-1.5 py-0.5 rounded"
-                                    style={{
-                                      backgroundColor: `${custom.urgencyColor}18`,
-                                      color: custom.urgencyColor,
-                                      border: `1px solid ${custom.urgencyColor}30`,
-                                    }}
-                                  >
-                                    {custom.urgency}
-                                  </span>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center justify-between gap-2">
+                                        {/* Urgency Tag */}
+                                        <span
+                                          className="text-[10px] font-mono font-bold uppercase px-1.5 py-0.5 rounded"
+                                          style={{
+                                            backgroundColor: `${custom.urgencyColor}18`,
+                                            color: custom.urgencyColor,
+                                            border: `1px solid ${custom.urgencyColor}30`,
+                                          }}
+                                        >
+                                          {custom.urgency}
+                                        </span>
 
-                                  {/* Technical Details Toggle */}
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleActionTech(actionId)}
-                                    className="text-[10.5px] font-mono text-[#5FC9E8] hover:text-[#8ee1f9] flex items-center gap-0.5 cursor-pointer"
-                                  >
-                                    <span>{showTech ? 'Hide tech details' : 'Technical details'}</span>
-                                    <ChevronDown className={`w-3 h-3 transition-transform ${showTech ? 'rotate-180' : ''}`} />
-                                  </button>
+                                        {/* Technical Details Toggle */}
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleActionTech(actionId)}
+                                          className="text-[10.5px] font-mono text-[#5FC9E8] hover:text-[#8ee1f9] flex items-center gap-0.5 cursor-pointer"
+                                        >
+                                          <span>{showTech ? 'Hide tech details' : 'Technical details'}</span>
+                                          <ChevronDown className={`w-3 h-3 transition-transform ${showTech ? 'rotate-180' : ''}`} />
+                                        </button>
+                                      </div>
+
+                                      {/* Plain-Language Title & Description */}
+                                      <h4 className={`text-xs font-semibold mt-1.5 ${isDone ? 'line-through text-[#7A8794]' : 'text-[#E8ECEF]'}`}>
+                                        {custom.plainTitle}
+                                      </h4>
+                                      <p className="text-[11.5px] text-[#7A8794] mt-0.5 leading-relaxed">
+                                        {custom.plainDescription}
+                                      </p>
+
+                                      {/* Technical Details Accordion */}
+                                      {showTech && (
+                                        <motion.div
+                                          initial={{ opacity: 0, height: 0 }}
+                                          animate={{ opacity: 1, height: 'auto' }}
+                                          exit={{ opacity: 0, height: 0 }}
+                                          className="mt-2.5 p-2.5 rounded-xl bg-[#06080B] border border-white/[0.06] text-[11px] font-mono text-[#5FC9E8] leading-relaxed break-words"
+                                        >
+                                          <div className="text-[10px] font-bold text-[#7A8794] uppercase mb-1">Technical Guidance:</div>
+                                          {custom.techDetail}
+                                        </motion.div>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-
-                                {/* Plain-Language Title & Description */}
-                                <h4 className={`text-xs font-semibold mt-1.5 ${isDone ? 'line-through text-[#7A8794]' : 'text-[#E8ECEF]'}`}>
-                                  {custom.plainTitle}
-                                </h4>
-                                <p className="text-[11.5px] text-[#7A8794] mt-0.5 leading-relaxed">
-                                  {custom.plainDescription}
-                                </p>
-
-                                {/* Technical Details Accordion */}
-                                {showTech && (
-                                  <motion.div
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: 'auto' }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    className="mt-2.5 p-2.5 rounded-xl bg-[#06080B] border border-white/[0.06] text-[11px] font-mono text-[#5FC9E8] leading-relaxed break-words"
-                                  >
-                                    <div className="text-[10px] font-bold text-[#7A8794] uppercase mb-1">Technical Guidance:</div>
-                                    {custom.techDetail}
-                                  </motion.div>
-                                )}
-                              </div>
-                            </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
-                    </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
                   {/* Bottom CTA Card (Evidence & Recovery Proof) */}

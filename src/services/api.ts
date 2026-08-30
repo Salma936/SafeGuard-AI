@@ -76,6 +76,20 @@ export async function analyzeSuspiciousAudio(audioB64: string, mimeType: string 
   return handleResponse<ThreatAnalysisResult>(response);
 }
 
+export async function analyzeSuspiciousVideo(videoB64: string, mimeType: string = 'video/mp4'): Promise<ThreatAnalysisResult> {
+  if (!videoB64) {
+    throw new Error('Please select a video file to analyze.');
+  }
+
+  const response = await fetch('/api/analyze/video/base64', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ video_b64: videoB64, mime_type: mimeType })
+  });
+
+  return handleResponse<ThreatAnalysisResult>(response);
+}
+
 export async function createIncident(incidentData: { title: string; category?: string; summary?: string; risk_level?: string; threat_type?: string }): Promise<any> {
   const response = await fetch('/api/incidents', {
     method: 'POST',

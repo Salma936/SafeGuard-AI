@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Play, MessageSquare, Link2, FileSearch, Mic, AlertTriangle, Check, ShieldAlert } from 'lucide-react';
+import { ArrowRight, Play, MessageSquare, Link2, FileSearch, Mic, AlertTriangle, Check, ShieldAlert, Video } from 'lucide-react';
 import { ViewMode } from '../types';
 import { DEMO_INCIDENTS } from '../data/demoIncidents';
 import { LiveStatusIndicator } from './LiveStatusIndicator';
@@ -55,7 +55,7 @@ export const Hero: React.FC<HeroProps> = ({ onNavigate, onScrollToSection }) => 
               className="text-base sm:text-lg text-[#7A8794] leading-relaxed mb-8 max-w-xl"
               style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}
             >
-              Upload a suspicious message, link, screenshot, or audio. SafeGuard AI analyzes the evidence, reconstructs what happened, and gives you clear steps to protect yourself and recover.
+              Upload a suspicious message, link, screenshot, audio, or video. SafeGuard AI analyzes the evidence, reconstructs what happened, and gives you clear steps to protect yourself and recover.
             </motion.p>
 
             {/* CTAs (Max 2: Primary "Analyze an Incident" + Secondary "Live Demo") */}
@@ -104,11 +104,15 @@ export const Hero: React.FC<HeroProps> = ({ onNavigate, onScrollToSection }) => 
                 Analyzes:
               </span>
               <span className="flex items-center gap-1.5 text-[#E8ECEF]">
-                <FileSearch className="w-3.5 h-3.5 text-[#5FC9E8]" /> Screenshots &amp; Photos
+                <FileSearch className="w-3.5 h-3.5 text-[#5FC9E8]" /> Images
               </span>
               <span className="text-[#4A5560]">&bull;</span>
               <span className="flex items-center gap-1.5 text-[#E8ECEF]">
                 <Mic className="w-3.5 h-3.5 text-[#5FC9E8]" /> Audio Clones
+              </span>
+              <span className="text-[#4A5560]">&bull;</span>
+              <span className="flex items-center gap-1.5 text-[#E8ECEF]">
+                <Video className="w-3.5 h-3.5 text-[#5FC9E8]" /> Video Deepfakes
               </span>
               <span className="text-[#4A5560]">&bull;</span>
               <span className="flex items-center gap-1.5 text-[#E8ECEF]">
@@ -197,6 +201,9 @@ export const Hero: React.FC<HeroProps> = ({ onNavigate, onScrollToSection }) => 
                   </span>
                   <span className="flex items-center gap-1.5 text-[#5FC9E8] font-medium">
                     <Check className="w-3.5 h-3.5 text-[#5FC9E8]" /> Audio
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[#5FC9E8] font-medium">
+                    <Check className="w-3.5 h-3.5 text-[#5FC9E8]" /> Video
                   </span>
                 </div>
               </div>

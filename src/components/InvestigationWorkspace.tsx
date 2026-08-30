@@ -30,7 +30,8 @@ import {
   MessageSquare,
   Lightbulb,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Video
 } from 'lucide-react';
 import {
   ViewMode,
@@ -46,8 +47,10 @@ import {
   analyzeSuspiciousUrl,
   analyzeSuspiciousImage,
   analyzeSuspiciousAudio,
+  analyzeSuspiciousVideo,
   addIncidentEvidence
 } from '../services/api';
+import { MAX_VIDEO_SIZE_BYTES, isVideoFile, readFileAsBase64 } from '../utils/fileUtils';
 import { LiveStatusIndicator } from './LiveStatusIndicator';
 import { ThreatIndexGauge } from './ThreatIndexGauge';
 import { MiniRiskGauge } from './MiniRiskGauge';
@@ -57,6 +60,7 @@ import {
   TimelineItemSkeleton,
   ActionItemSkeleton
 } from './SkeletonLoader';
+import { EvidenceCard } from './EvidenceCard';
 
 interface InvestigationWorkspaceProps {
   initialMode?: ViewMode;
@@ -192,6 +196,8 @@ const getTacticIcon = (tactic: string) => {
   if (lower.includes('breach') || lower.includes('regurgitation')) return Lock;
   if (lower.includes('bluff') || lower.includes('extortion'))
     return AlertTriangle;
+  if (lower.includes('deepfake') || lower.includes('video') || lower.includes('synthetic'))
+    return Video;
   return ShieldAlert;
 };
 
@@ -257,8 +263,18 @@ const getIndicatorPlainLanguage = (indicator: string): string => {
     return "A harmful attachment or file download that could install tracking malware.";
   }
 
-  if (lower.includes('ai-generated') || lower.includes('voice clone')) {
+  if (lower.includes('ai-generated') || lower.includes('voice clone') || lower.includes('voice') || lower.includes('acoustic')) {
     return "Synthesized audio mimicking someone's voice using AI generator models.";
+  }
+
+  if (
+    lower.includes('facial movement') ||
+    lower.includes('deepfake') ||
+    lower.includes('manipulation likelihood') ||
+    lower.includes('audio-visual sync') ||
+    lower.includes('morphed')
+  ) {
+    return "Facial inconsistencies and audio desynchronization indicate synthetic video manipulation.";
   }
 
   return "Identified as a suspicious pattern commonly used in digital threat campaigns.";
@@ -303,6 +319,14 @@ const getTacticPlainLanguage = (tactic: string): string => {
     return "Tracking spyware";
   }
 
+  if (lower.includes('voice') || lower.includes('vishing') || lower.includes('acoustic')) {
+    return "AI voice clone spoof";
+  }
+
+  if (lower.includes('synthetic media') || lower.includes('deepfake')) {
+    return "Synthetic Media / Deepfake Video Fabrication";
+  }
+
   return tactic;
 };
 
@@ -322,6 +346,9 @@ const getSignalBadgeIcon = (indicator: string) => {
   }
   if (lower.includes('ssl') || lower.includes('cert') || lower.includes('reverse proxy') || lower.includes('token') || lower.includes('auth')) {
     return Lock;
+  }
+  if (lower.includes('video') || lower.includes('facial') || lower.includes('sync') || lower.includes('morphed') || lower.includes('deepfake')) {
+    return Video;
   }
   return Zap;
 };
@@ -445,7 +472,7 @@ export const InvestigationWorkspace: React.FC<
     const [customUrlInput, setCustomUrlInput] = useState('');
 
     const [customTypeInput, setCustomTypeInput] = useState<
-      'message' | 'url' | 'screenshot' | 'email' | 'audio'
+      'message' | 'url' | 'screenshot' | 'email' | 'audio' | 'video'
     >('message');
 
     const [selectedEvidenceFile, setSelectedEvidenceFile] =
@@ -457,6 +484,8 @@ export const InvestigationWorkspace: React.FC<
     const [hasCopiedHash, setHasCopiedHash] = useState(false);
     const [expandedEvidenceIds, setExpandedEvidenceIds] = useState<Record<string, boolean>>({});
     const [technicalOpen, setTechnicalOpen] = useState(false);
+    const [showAllEvidence, setShowAllEvidence] = useState(false);
+    const [showAllTactics, setShowAllTactics] = useState(false);
     const constellationRef = useRef<ConstellationHandle>(null);
 
     const toggleEvidenceDetails = (id: string) => {
@@ -483,7 +512,9 @@ export const InvestigationWorkspace: React.FC<
         | 'message'
         | 'url'
         | 'screenshot'
-        | 'email' = 'message'
+        | 'email'
+        | 'audio'
+        | 'video' = 'message'
     ) => {
       const riskLevelCapitalized:
         | 'Low'
@@ -720,20 +751,7 @@ export const InvestigationWorkspace: React.FC<
             selectedEvidenceFile.type.startsWith('audio/'))
         ) {
           if (selectedEvidenceFile) {
-            const b64 = await new Promise<string>(
-              (resolve, reject) => {
-                const reader = new FileReader();
-
-                reader.onload = () =>
-                  resolve(reader.result as string);
-
-                reader.onerror = reject;
-
-                reader.readAsDataURL(
-                  selectedEvidenceFile
-                );
-              }
-            );
+            const b64 = await readFileAsBase64(selectedEvidenceFile);
 
             result = await analyzeSuspiciousAudio(
               b64,
@@ -745,6 +763,32 @@ export const InvestigationWorkspace: React.FC<
             result = await analyzeSuspiciousText(
               customTextInput.trim() ||
               'Audio Evidence Analysis Request'
+            );
+          }
+        } else if (
+          customTypeInput === 'video' ||
+          (selectedEvidenceFile && isVideoFile(selectedEvidenceFile))
+        ) {
+          if (selectedEvidenceFile) {
+            if (selectedEvidenceFile.size > MAX_VIDEO_SIZE_BYTES) {
+              setAnalysisError(
+                'Video file exceeds 20MB limit. Please upload a clip under 20MB for inline forensic analysis.'
+              );
+              setIsAnalyzing(false);
+              return;
+            }
+
+            const b64 = await readFileAsBase64(selectedEvidenceFile);
+            result = await analyzeSuspiciousVideo(
+              b64,
+              selectedEvidenceFile.type || 'video/mp4'
+            );
+
+            displayContent = `${selectedEvidenceFile.name} (Video Forensics Evidence)`;
+          } else {
+            result = await analyzeSuspiciousText(
+              customTextInput.trim() ||
+              'Video Forensics Evidence Analysis Request'
             );
           }
         } else {
@@ -985,124 +1029,148 @@ export const InvestigationWorkspace: React.FC<
       ========================================================= */}
 
         <div className="border-b border-white/[0.06] bg-[#06080B]/60 px-4 py-8 sm:px-6 sm:py-10 lg:px-8 xl:px-12">
-          <div className="mx-auto max-w-7xl">
-            {/* Eyebrow label */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
-              className="mb-3"
-            >
-              <span className="font-mono text-xs font-semibold tracking-widest text-[#4A5560] uppercase">
-                01 — INCIDENT OVERVIEW
-              </span>
-            </motion.div>
-
-            {/* Uppercase Kinetic Headline */}
-            <h1
-              className="font-display font-bold text-2xl sm:text-3xl md:text-[34px] lg:text-[38px] text-[#E8ECEF] mb-4 tracking-tight leading-[1.15]"
-              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-            >
-              {/* Line 1 */}
-              <span className="block overflow-visible whitespace-normal sm:whitespace-nowrap">
-                {['COORDINATED', 'HARASSMENT', 'CAMPAIGN'].map((word, idx) => (
-                  <motion.span
-                    key={`dash-h1-${idx}`}
-                    initial={{ opacity: 0, y: 24, filter: 'blur(6px)' }}
-                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                    transition={{
-                      duration: 0.55,
-                      delay: 0.15 + idx * 0.07,
-                      ease: [0.16, 1, 0.3, 1],
-                    }}
-                    className="inline-block mr-2.5 sm:mr-3"
-                  >
-                    {word}
-                  </motion.span>
-                ))}
-              </span>
-
-              {/* Line 2 */}
-              <span className="block overflow-visible whitespace-normal sm:whitespace-nowrap text-[#5FC9E8]">
-                {['CROSS-PLATFORM'].map((word, idx) => (
-                  <motion.span
-                    key={`dash-h2-${idx}`}
-                    initial={{ opacity: 0, y: 24, filter: 'blur(6px)' }}
-                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                    transition={{
-                      duration: 0.55,
-                      delay: 0.15 + (3 + idx) * 0.07,
-                      ease: [0.16, 1, 0.3, 1],
-                    }}
-                    className="inline-block mr-2.5 sm:mr-3"
-                  >
-                    {word}
-                  </motion.span>
-                ))}
-              </span>
-            </h1>
-
-            {/* Three Short Stat Lines */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, delay: 0.48, ease: [0.16, 1, 0.3, 1] }}
-              className="flex flex-wrap items-center gap-y-2 gap-x-6 sm:gap-x-8 mb-6 text-sm"
-              style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}
-            >
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#5FC9E8]" />
-                <span className="font-mono font-bold text-[#E8ECEF]">4</span>
-                <span className="text-[#7A8794]">evidence artifacts</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#5FC9E8]" />
-                <span className="font-mono text-[#E8ECEF]">Text · URL · Screenshot · Audio</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#5FC9E8]" />
-                <span className="text-[#7A8794]">Tamper-evident evidence chain</span>
-              </div>
-            </motion.div>
-
-            {/* Two Buttons */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, delay: 0.62, ease: [0.16, 1, 0.3, 1] }}
-              className="flex flex-wrap items-center gap-3.5"
-            >
-              <button
-                id="dashboard-hero-primary-cta"
-                onClick={() => {
-                  setActiveTab('evidence');
-                  setTimeout(() => {
-                    document.getElementById('ai-analyzer-textarea')?.focus();
-                  }, 50);
-                }}
-                className="cursor-pointer bg-[#5FC9E8] hover:bg-[#7be2fe] text-[#0A0D10] font-semibold px-6 py-3 rounded-full inline-flex items-center gap-2 text-sm transition-all duration-200"
-                style={{
-                  boxShadow: '0 8px 30px -8px rgba(95, 201, 232, 0.5)',
-                }}
+          <div className="mx-auto max-w-7xl flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8 xl:gap-12">
+            {/* Left Content Column */}
+            <div className="flex-1 min-w-0">
+              {/* Eyebrow label */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
+                className="mb-3"
               >
-                <span>Open Investigation</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+                <span className="font-mono text-xs font-semibold tracking-widest text-[#4A5560] uppercase">
+                  01 — INCIDENT OVERVIEW
+                </span>
+              </motion.div>
 
-              <button
-                id="dashboard-hero-secondary-cta"
-                onClick={handleExportReport}
-                className="cursor-pointer text-[#E8ECEF] font-semibold px-6 py-3 rounded-full inline-flex items-center gap-2 text-sm transition-all duration-200"
-                style={{
-                  background: 'rgba(13, 17, 22, 0.55)',
-                  backdropFilter: 'blur(18px) saturate(140%)',
-                  WebkitBackdropFilter: 'blur(18px) saturate(140%)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                }}
+              {/* Uppercase Kinetic Headline */}
+              <h1
+                className="font-display font-bold text-2xl sm:text-3xl md:text-[34px] lg:text-[38px] text-[#E8ECEF] mb-4 tracking-tight leading-[1.15]"
+                style={{ fontFamily: "'Space Grotesk', sans-serif" }}
               >
-                <Download className="w-4 h-4 text-[#5FC9E8]" />
-                <span>Export Report</span>
-              </button>
+                {/* Line 1 */}
+                <span className="block overflow-visible whitespace-normal sm:whitespace-nowrap">
+                  {['COORDINATED', 'HARASSMENT', 'CAMPAIGN'].map((word, idx) => (
+                    <motion.span
+                      key={`dash-h1-${idx}`}
+                      initial={{ opacity: 0, y: 24, filter: 'blur(6px)' }}
+                      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                      transition={{
+                        duration: 0.55,
+                        delay: 0.15 + idx * 0.07,
+                        ease: [0.16, 1, 0.3, 1],
+                      }}
+                      className="inline-block mr-2.5 sm:mr-3"
+                    >
+                      {word}
+                    </motion.span>
+                  ))}
+                </span>
+
+                {/* Line 2 */}
+                <span className="block overflow-visible whitespace-normal sm:whitespace-nowrap text-[#5FC9E8]">
+                  {['CROSS-PLATFORM'].map((word, idx) => (
+                    <motion.span
+                      key={`dash-h2-${idx}`}
+                      initial={{ opacity: 0, y: 24, filter: 'blur(6px)' }}
+                      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                      transition={{
+                        duration: 0.55,
+                        delay: 0.15 + (3 + idx) * 0.07,
+                        ease: [0.16, 1, 0.3, 1],
+                      }}
+                      className="inline-block mr-2.5 sm:mr-3"
+                    >
+                      {word}
+                    </motion.span>
+                  ))}
+                </span>
+              </h1>
+
+              {/* Three Short Stat Lines */}
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, delay: 0.48, ease: [0.16, 1, 0.3, 1] }}
+                className="flex flex-wrap items-center gap-y-2 gap-x-6 sm:gap-x-8 mb-6 text-sm"
+                style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#5FC9E8]" />
+                  <span className="font-mono font-bold text-[#E8ECEF]">{activeCase.evidence.length}</span>
+                  <span className="text-[#7A8794]">evidence artifacts</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#5FC9E8]" />
+                  <span className="font-mono text-[#E8ECEF]">Text · URL · Screenshot · Audio · Video</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#5FC9E8]" />
+                  <span className="text-[#7A8794]">Tamper-evident evidence chain</span>
+                </div>
+              </motion.div>
+
+              {/* Two Buttons */}
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, delay: 0.62, ease: [0.16, 1, 0.3, 1] }}
+                className="flex flex-wrap items-center gap-3.5"
+              >
+                <button
+                  id="dashboard-hero-primary-cta"
+                  onClick={() => {
+                    setActiveTab('evidence');
+                    setTimeout(() => {
+                      document.getElementById('ai-analyzer-textarea')?.focus();
+                    }, 50);
+                  }}
+                  className="cursor-pointer bg-[#5FC9E8] hover:bg-[#7be2fe] text-[#0A0D10] font-semibold px-6 py-3 rounded-full inline-flex items-center gap-2 text-sm transition-all duration-200"
+                  style={{
+                    boxShadow: '0 8px 30px -8px rgba(95, 201, 232, 0.5)',
+                  }}
+                >
+                  <span>Open Investigation</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  id="dashboard-hero-secondary-cta"
+                  onClick={handleExportReport}
+                  className="cursor-pointer text-[#E8ECEF] font-semibold px-6 py-3 rounded-full inline-flex items-center gap-2 text-sm transition-all duration-200"
+                  style={{
+                    background: 'rgba(13, 17, 22, 0.55)',
+                    backdropFilter: 'blur(18px) saturate(140%)',
+                    WebkitBackdropFilter: 'blur(18px) saturate(140%)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                  }}
+                >
+                  <Download className="w-4 h-4 text-[#5FC9E8]" />
+                  <span>Export Report</span>
+                </button>
+              </motion.div>
+            </div>
+
+            {/* Right Column: Evidence Constellation Preview */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full max-w-sm sm:max-w-md lg:w-[260px] xl:w-[280px] shrink-0 self-center lg:self-auto"
+            >
+              <div className="mb-2">
+                <span className="font-mono text-xs font-semibold tracking-wider text-[#7A8794] uppercase">
+                  LIVE CASE GRAPH
+                </span>
+              </div>
+              <div className="pointer-events-none select-none">
+                <EvidenceConstellation
+                  variant="preview"
+                  evidence={activeCase.evidence}
+                  caseTitle={activeCase.title}
+                />
+              </div>
             </motion.div>
           </div>
         </div>
@@ -1734,187 +1802,85 @@ export const InvestigationWorkspace: React.FC<
 
                   {/* EVIDENCE CARDS */}
 
-                  <AnimatePresence>
+                  {(() => {
+                    const isVisualEvidence = (type: string) => {
+                      const t = type.toLowerCase();
+                      return t === 'video' || t === 'screenshot' || t === 'image' || t === 'file';
+                    };
 
-                    {activeCase.evidence.map(
-                      (ev, idx) => {
-                        const isHigh =
-                          ev.riskScore >= 75 ||
-                          ev.riskLevel.toLowerCase() === 'critical' ||
-                          ev.riskLevel.toLowerCase() === 'high';
-                        const isMed =
-                          ev.riskScore >= 50 ||
-                          ev.riskLevel.toLowerCase() === 'medium';
-                        const severityColor = isHigh
-                          ? '#D9705A'
-                          : isMed
-                          ? '#E0A458'
-                          : '#5FC9E8';
+                    const sortedEvidence = [...activeCase.evidence].sort((a, b) => {
+                      const aVisual = isVisualEvidence(a.type);
+                      const bVisual = isVisualEvidence(b.type);
 
-                        return (
-                          <motion.div
-                            key={ev.id}
-                            initial={{
-                              opacity: 0,
-                              y: 14
-                            }}
-                            animate={{
-                              opacity: 1,
-                              y: 0
-                            }}
-                            transition={{
-                              duration: 0.4,
-                              delay: idx * 0.08,
-                              ease: [0.16, 1, 0.3, 1]
-                            }}
-                            whileHover={{
-                              y: -2,
-                              borderColor: 'rgba(95, 201, 232, 0.3)'
-                            }}
-                            className="w-full min-w-0 rounded-2xl border border-white/[0.06] p-5 shadow-xs transition-all relative overflow-hidden"
-                            style={{
-                              background: 'rgba(13, 17, 22, 0.65)',
-                              backdropFilter: 'blur(16px) saturate(130%)',
-                              WebkitBackdropFilter: 'blur(16px) saturate(130%)',
-                              borderLeftWidth: '3.5px',
-                              borderLeftColor: severityColor
-                            }}
-                          >
-                            {/* 1. Header Row */}
-                            <div className="flex min-w-0 items-start justify-between gap-3 mb-3.5">
-                              {/* Left: Icon in 36x36 colored square with 8px corner radius + Title & Timestamp */}
-                              <div className="flex min-w-0 items-center gap-3">
-                                <div
-                                  className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[8px] border"
-                                  style={{
-                                    backgroundColor: `${severityColor}15`,
-                                    borderColor: `${severityColor}30`,
-                                    color: severityColor,
-                                  }}
-                                >
-                                  {ev.type === 'message' && <MessageSquare className="h-4 w-4" />}
-                                  {ev.type === 'url' && <LinkIcon className="h-4 w-4" />}
-                                  {ev.type === 'screenshot' && <ShieldAlert className="h-4 w-4" />}
-                                  {ev.type === 'email' && <FileText className="h-4 w-4" />}
-                                  {ev.type === 'audio' && <Mic className="h-4 w-4" />}
-                                </div>
+                      // 1. Video and screenshot/image always appear first
+                      if (aVisual && !bVisual) return -1;
+                      if (!aVisual && bVisual) return 1;
 
-                                <div className="min-w-0">
-                                  <h4
-                                    className="break-words font-semibold text-sm text-[#E8ECEF] leading-tight"
-                                    style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-                                  >
-                                    {ev.title}
-                                  </h4>
-                                  <div className="break-words text-[11px] font-mono text-[#7A8794] mt-0.5">
-                                    {ev.type.toUpperCase()} &bull; Ingested at {ev.timestamp} {ev.source ? `from ${ev.source}` : ''}
-                                  </div>
-                                </div>
-                              </div>
+                      // 2. Within the group, sort by risk score descending
+                      return b.riskScore - a.riskScore;
+                    });
+                    const initialEvidence = sortedEvidence.slice(0, 2);
+                    const extraEvidence = sortedEvidence.slice(2);
+                    const hiddenCount = extraEvidence.length;
 
-                              {/* Right: Large risk score number (20px, bold) + one-line risk label */}
-                              <div className="shrink-0 text-right">
-                                <div
-                                  className="text-[20px] font-bold font-mono leading-none"
-                                  style={{ color: severityColor }}
-                                >
-                                  {ev.riskScore}
-                                </div>
-                                <div
-                                  className="text-[10px] font-mono font-bold uppercase mt-1 tracking-wider leading-none"
-                                  style={{ color: severityColor }}
-                                >
-                                  {ev.riskLevel.toLowerCase()} risk
-                                </div>
-                              </div>
-                            </div>
+                    return (
+                      <div className="space-y-4">
+                        <AnimatePresence initial={false}>
+                          {initialEvidence.map((ev, idx) => (
+                            <EvidenceCard
+                              key={ev.id}
+                              ev={ev}
+                              idx={idx}
+                              isExpanded={!!expandedEvidenceIds[ev.id]}
+                              onToggleExpand={() => toggleEvidenceDetails(ev.id)}
+                            />
+                          ))}
 
-                            {/* 2. Signal Badges Row (1-3 compact pill badges with icon + short label) */}
-                            {ev.indicators && ev.indicators.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-2 mb-3.5">
-                                {ev.indicators.slice(0, 3).map((ind, iIdx) => {
-                                  const BadgeIcon = getSignalBadgeIcon(ind);
-                                  return (
-                                    <div
-                                      key={iIdx}
-                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono border"
-                                      style={{
-                                        backgroundColor: `${severityColor}12`,
-                                        borderColor: `${severityColor}28`,
-                                        color: severityColor,
-                                      }}
-                                    >
-                                      <BadgeIcon className="w-3 h-3 shrink-0" />
-                                      <span className="truncate max-w-[240px] sm:max-w-xs">{ind}</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
+                          {showAllEvidence && (
+                            <motion.div
+                              key="extra-evidence"
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                              className="space-y-4 overflow-hidden"
+                            >
+                              {extraEvidence.map((ev, idx) => (
+                                <EvidenceCard
+                                  key={ev.id}
+                                  ev={ev}
+                                  idx={idx + 2}
+                                  isExpanded={!!expandedEvidenceIds[ev.id]}
+                                  onToggleExpand={() => toggleEvidenceDetails(ev.id)}
+                                />
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
 
-                            {/* 3. Insight Row ("WHAT THIS MEANS" restyled as single line with small lightbulb icon) */}
-                            <div className="pt-2.5 border-t border-white/[0.05] flex items-center justify-between gap-3 text-xs">
-                              <div className="flex items-center gap-2 min-w-0 text-[#7A8794] truncate">
-                                <Lightbulb className="w-3.5 h-3.5 text-[#5FC9E8] shrink-0" />
-                                <span className="font-semibold text-[#5FC9E8] shrink-0 text-[11px] font-mono uppercase">
-                                  What this means:
-                                </span>
-                                <span className="truncate text-[#E8ECEF] text-[11.5px]">
-                                  {ev.indicators.length > 0
-                                    ? getIndicatorPlainLanguage(ev.indicators[0])
-                                    : 'Suspicious indicators detected for this evidence item.'}
-                                </span>
-                              </div>
-
-                              {/* 4. Full Details Toggle Button */}
-                              <button
-                                type="button"
-                                onClick={() => toggleEvidenceDetails(ev.id)}
-                                className="shrink-0 inline-flex items-center gap-1 text-[11px] font-mono text-[#5FC9E8] hover:text-[#8ee1f9] cursor-pointer"
-                              >
-                                <span>{expandedEvidenceIds[ev.id] ? 'Hide details' : 'View full details'}</span>
-                                <ChevronDown className={`w-3 h-3 transition-transform ${expandedEvidenceIds[ev.id] ? 'rotate-180' : ''}`} />
-                              </button>
-                            </div>
-
-                            {/* 4. Collapsible Full Details (Raw message text, URLs, metadata) */}
-                            <AnimatePresence>
-                              {expandedEvidenceIds[ev.id] && (
-                                <motion.div
-                                  initial={{ opacity: 0, height: 0 }}
-                                  animate={{ opacity: 1, height: 'auto' }}
-                                  exit={{ opacity: 0, height: 0 }}
-                                  transition={{ duration: 0.2 }}
-                                  className="mt-3 pt-3 border-t border-white/[0.06] space-y-2.5"
-                                >
-                                  {/* Raw Evidence Text */}
-                                  <div className="p-3 rounded-xl bg-[#06080B]/90 border border-white/[0.06] font-mono text-xs text-[#E8ECEF] leading-relaxed break-words">
-                                    <div className="text-[10px] font-mono uppercase text-[#7A8794] mb-1 font-semibold">
-                                      Raw Evidence Content:
-                                    </div>
-                                    {renderAnnotatedEvidence(ev.content, ev.indicators, severityColor)}
-                                  </div>
-
-                                  {/* Metadata Key-Value pairs */}
-                                  {ev.metadata && Object.keys(ev.metadata).length > 0 && (
-                                    <div className="p-3 rounded-xl bg-[#06080B]/60 border border-white/[0.04] flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] font-mono text-[#7A8794]">
-                                      {Object.entries(ev.metadata).map(([key, val]) => (
-                                        <span key={key} className="inline-flex items-center gap-1.5">
-                                          <span className="text-[#4A5560] font-semibold">{key}:</span>
-                                          <span className="text-[#E8ECEF]">{val}</span>
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                </motion.div>
+                        {hiddenCount > 0 && (
+                          <div className="flex justify-center pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setShowAllEvidence((prev) => !prev)}
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#5FC9E8] hover:text-[#7be2fe] transition-colors cursor-pointer py-1.5 px-3 rounded-xl hover:bg-white/[0.04]"
+                            >
+                              <span>
+                                {showAllEvidence
+                                  ? 'Show less'
+                                  : `Show ${hiddenCount} more`}
+                              </span>
+                              {showAllEvidence ? (
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5" />
                               )}
-                            </AnimatePresence>
-                          </motion.div>
-                        );
-                      }
-                    )}
-
-                  </AnimatePresence>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                 </div>
               )}
@@ -2290,50 +2256,161 @@ export const InvestigationWorkspace: React.FC<
                   </span>
 
                   <div className="space-y-2.5 min-w-0">
-                    {activeCase.synthesis.tacticsObserved.map((tactic, idx) => {
-                      const isCritical = activeCase.riskScore >= 90;
-                      const isHighScore = activeCase.riskScore >= 70;
-                      const accentColor = isCritical ? '#D9705A' : isHighScore ? '#E0A458' : '#5FC9E8';
-                      const severityLabel = isCritical ? 'critical' : isHighScore ? 'high' : 'medium';
-                      // Approximate per-tactic score (use evidence scores where available, fallback to case score)
-                      const tacticScore = activeCase.evidence[idx]?.riskScore ?? activeCase.riskScore;
-                      const displayName = getTacticPlainLanguage(tactic);
-                      const description = getTacticDescription(tactic);
+                    {(() => {
+                      const isVisualType = (type: string) => {
+                        const t = type.toLowerCase();
+                        return t === 'video' || t === 'screenshot' || t === 'image' || t === 'file';
+                      };
+
+                      const isVisualTactic = (tactic: string, matchingEv?: EvidenceItem) => {
+                        if (matchingEv && isVisualType(matchingEv.type)) {
+                          return true;
+                        }
+                        const lower = tactic.toLowerCase();
+                        return (
+                          lower.includes('video') ||
+                          lower.includes('deepfake') ||
+                          lower.includes('synthetic media') ||
+                          lower.includes('screenshot') ||
+                          lower.includes('image') ||
+                          lower.includes('mfa prompt') ||
+                          lower.includes('fatigue')
+                        );
+                      };
+
+                      const scoredTactics = activeCase.synthesis.tacticsObserved.map((tactic, idx) => {
+                        const lower = tactic.toLowerCase();
+                        const matchingEv = activeCase.evidence.find(
+                          (ev) =>
+                            ev.title.toLowerCase().includes(lower) ||
+                            ev.indicators.some((ind) =>
+                              ind.toLowerCase().includes(lower)
+                            ) ||
+                            ((lower.includes('video') || lower.includes('synthetic media') || lower.includes('deepfake')) && ev.type === 'video') ||
+                            ((lower.includes('fatigue') || lower.includes('prompt')) && ev.type === 'screenshot') ||
+                            (lower.includes('smish') && ev.type === 'message') ||
+                            (lower.includes('proxy') && ev.type === 'url') ||
+                            ((lower.includes('voice') || lower.includes('acoustic')) && ev.type === 'audio')
+                        );
+
+                        const isVideoOrDeepfake =
+                          lower.includes('synthetic media') || lower.includes('deepfake');
+
+                        const tacticScore = isVideoOrDeepfake
+                          ? 68
+                          : (matchingEv?.riskScore ?? activeCase.evidence[idx]?.riskScore ?? activeCase.riskScore);
+
+                        const isVisual = isVisualTactic(tactic, matchingEv);
+
+                        return {
+                          tactic,
+                          tacticScore,
+                          isVisual,
+                          idx
+                        };
+                      }).sort((a, b) => {
+                        // 1. Video and screenshot/image always appear first
+                        if (a.isVisual && !b.isVisual) return -1;
+                        if (!a.isVisual && b.isVisual) return 1;
+
+                        // 2. Within that group, sort by risk score descending
+                        return b.tacticScore - a.tacticScore;
+                      });
+
+                      const initialTactics = scoredTactics.slice(0, 2);
+                      const extraTactics = scoredTactics.slice(2);
+                      const hiddenTacticsCount = extraTactics.length;
+
+                      const renderTacticItem = (
+                        { tactic, tacticScore, idx }: { tactic: string; tacticScore: number; idx: number },
+                        renderIdx: number
+                      ) => {
+                        const isCritical = tacticScore >= 90;
+                        const isHighScore = tacticScore >= 70 || tactic.toLowerCase().includes('deepfake') || tactic.toLowerCase().includes('synthetic media');
+                        const accentColor = isCritical ? '#D9705A' : isHighScore ? '#E0A458' : '#5FC9E8';
+                        const severityLabel = isCritical ? 'critical' : isHighScore ? 'high' : 'medium';
+                        const displayName = getTacticPlainLanguage(tactic);
+                        const description = getTacticDescription(tactic);
+
+                        return (
+                          <motion.div
+                            key={`${tactic}-${idx}`}
+                            initial={{ opacity: 0, x: -8 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ duration: 0.35, delay: 0.06 + renderIdx * 0.05, ease: 'easeOut' }}
+                            className="rounded-lg pl-3 pr-3 py-2.5 min-w-0"
+                            style={{
+                              background: 'rgba(255,255,255,0.025)',
+                              borderLeft: `3px solid ${accentColor}`,
+                            }}
+                          >
+                            {/* Top line: tactic name + score · severity */}
+                            <div className="flex items-center justify-between gap-2 min-w-0">
+                              <span
+                                className="font-semibold text-xs text-[#E8ECEF] leading-snug break-words min-w-0"
+                                style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+                              >
+                                {displayName}
+                              </span>
+                              <span
+                                className="shrink-0 text-[10px] font-mono font-bold whitespace-nowrap"
+                                style={{ color: accentColor }}
+                              >
+                                {tacticScore} · {severityLabel}
+                              </span>
+                            </div>
+                            {/* Second line: plain-English description */}
+                            <p className="mt-1 text-[11px] leading-relaxed text-[#7A8794]">
+                              {description}
+                            </p>
+                          </motion.div>
+                        );
+                      };
 
                       return (
-                        <motion.div
-                          key={idx}
-                          initial={{ opacity: 0, x: -8 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ duration: 0.35, delay: 0.06 + idx * 0.07, ease: 'easeOut' }}
-                          className="rounded-lg pl-3 pr-3 py-2.5 min-w-0"
-                          style={{
-                            background: 'rgba(255,255,255,0.025)',
-                            borderLeft: `3px solid ${accentColor}`,
-                          }}
-                        >
-                          {/* Top line: tactic name + score · severity */}
-                          <div className="flex items-center justify-between gap-2 min-w-0">
-                            <span
-                              className="font-semibold text-xs text-[#E8ECEF] leading-snug break-words min-w-0"
-                              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-                            >
-                              {displayName}
-                            </span>
-                            <span
-                              className="shrink-0 text-[10px] font-mono font-bold whitespace-nowrap"
-                              style={{ color: accentColor }}
-                            >
-                              {tacticScore} · {severityLabel}
-                            </span>
+                        <>
+                          <div className="space-y-2.5 min-w-0">
+                            {initialTactics.map((item, i) => renderTacticItem(item, i))}
                           </div>
-                          {/* Second line: plain-English description */}
-                          <p className="mt-1 text-[11px] leading-relaxed text-[#7A8794]">
-                            {description}
-                          </p>
-                        </motion.div>
+
+                          <AnimatePresence initial={false}>
+                            {showAllTactics && (
+                              <motion.div
+                                key="extra-tactics"
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                                className="space-y-2.5 overflow-hidden pt-2.5"
+                              >
+                                {extraTactics.map((item, i) => renderTacticItem(item, i + 2))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          {hiddenTacticsCount > 0 && (
+                            <div className="pt-2">
+                              <button
+                                type="button"
+                                onClick={() => setShowAllTactics((prev) => !prev)}
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#5FC9E8] hover:text-[#7be2fe] transition-colors cursor-pointer"
+                              >
+                                <span>
+                                  {showAllTactics
+                                    ? 'Show less'
+                                    : `Show ${hiddenTacticsCount} more`}
+                                </span>
+                                {showAllTactics ? (
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                ) : (
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          )}
+                        </>
                       );
-                    })}
+                    })()}
                   </div>
                 </div>
 
@@ -2671,7 +2748,7 @@ export const InvestigationWorkspace: React.FC<
                       stiffness: 350,
                       damping: 28
                     }}
-                    className="w-full max-w-lg max-h-[90vh] overflow-y-auto space-y-4 rounded-3xl border border-white/[0.08] bg-[#0D1116] p-5 text-[#E8ECEF] shadow-2xl sm:p-6"
+                    className="w-full max-w-xl max-h-[90vh] overflow-y-auto space-y-4 rounded-3xl border border-white/[0.08] bg-[#0D1116] p-5 text-[#E8ECEF] shadow-2xl sm:p-6"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {/* MODAL HEADER */}
@@ -2713,14 +2790,15 @@ export const InvestigationWorkspace: React.FC<
                           Artifact Category
                         </label>
 
-                        <div className="grid grid-cols-5 gap-1.5">
+                        <div className="flex flex-wrap gap-3 items-center">
                           {(
                             [
                               'message',
                               'url',
                               'screenshot',
                               'email',
-                              'audio'
+                              'audio',
+                              'video'
                             ] as const
                           ).map((type) => (
                             <motion.button
@@ -2737,13 +2815,14 @@ export const InvestigationWorkspace: React.FC<
                                   type
                                 )
                               }
-                              className={`cursor-pointer rounded-xl border py-2 text-xs font-semibold capitalize transition-all ${customTypeInput ===
+                              className={`cursor-pointer rounded-xl border px-3.5 py-1.5 text-xs font-semibold capitalize transition-all flex items-center justify-center gap-1.5 ${customTypeInput ===
                                   type
                                   ? 'border-[#5FC9E8] bg-[#5FC9E8] text-[#0A0D10] shadow-xs'
                                   : 'border-white/[0.08] bg-[#06080B] text-[#7A8794] hover:bg-white/[0.04] hover:text-[#E8ECEF]'
                                 }`}
                             >
-                              {type}
+                              {type === 'video' && <Video className="w-3.5 h-3.5 shrink-0" />}
+                              <span>{type}</span>
                             </motion.button>
                           ))}
                         </div>
@@ -2754,14 +2833,19 @@ export const InvestigationWorkspace: React.FC<
                       {(customTypeInput ===
                         'screenshot' ||
                         customTypeInput ===
-                        'audio') && (
+                        'audio' ||
+                        customTypeInput ===
+                        'video') && (
                           <div>
                             <label className="mb-1.5 block text-xs font-mono uppercase text-[#7A8794]">
                               Upload{' '}
                               {customTypeInput ===
                                 'screenshot'
                                 ? 'Image / Screenshot'
-                                : 'Audio Recording'}
+                                : customTypeInput ===
+                                  'audio'
+                                ? 'Audio Recording'
+                                : 'Video Recording (.mp4, .mov, .webm)'}
                             </label>
 
                             <input
@@ -2770,16 +2854,27 @@ export const InvestigationWorkspace: React.FC<
                                 customTypeInput ===
                                   'screenshot'
                                   ? 'image/*'
-                                  : 'audio/*'
+                                  : customTypeInput ===
+                                    'audio'
+                                  ? 'audio/*'
+                                  : 'video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm'
                               }
-                              onChange={(e) =>
-                                setSelectedEvidenceFile(
-                                  e.target.files?.[0] ||
-                                  null
-                                )
-                              }
+                              onChange={(e) => {
+                                const file = e.target.files?.[0] || null;
+                                if (file && customTypeInput === 'video' && file.size > MAX_VIDEO_SIZE_BYTES) {
+                                  setAnalysisError('Video file exceeds 20MB limit. Please upload a clip under 20MB for inline forensic analysis.');
+                                  setSelectedEvidenceFile(null);
+                                  return;
+                                }
+                                setSelectedEvidenceFile(file);
+                              }}
                               className="block w-full min-w-0 cursor-pointer rounded-2xl border border-white/[0.08] bg-[#06080B] px-3 py-2 text-xs font-mono text-[#7A8794] file:mr-3 file:rounded-xl file:border-0 file:bg-[#151B22] file:px-3 file:py-1 file:text-xs file:font-semibold file:text-[#5FC9E8] hover:file:bg-[#1f2833]"
                             />
+                            {customTypeInput === 'video' && (
+                              <p className="mt-1 text-[11px] text-[#7A8794]">
+                                Supports MP4, MOV, WEBM (Max 20MB for inline forensic deepfake detection)
+                              </p>
+                            )}
                           </div>
                         )}
 

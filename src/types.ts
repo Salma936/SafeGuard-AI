@@ -16,7 +16,7 @@ export interface ForensicsAnalysisResult {
 
 export interface EvidenceItem {
   id: string;
-  type: 'message' | 'url' | 'screenshot' | 'email' | 'file' | 'audio';
+  type: 'message' | 'url' | 'screenshot' | 'email' | 'file' | 'audio' | 'video';
   title: string;
   content: string;
   timestamp: string;

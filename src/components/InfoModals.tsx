@@ -77,7 +77,7 @@ const AboutModal: React.FC<{ onClose: () => void; onNavigate: (v: ViewMode) => v
         {[
           { icon: Zap, title: 'Instant Analysis', desc: 'AI-powered threat detection in seconds' },
           { icon: Lock, title: 'Privacy First', desc: 'Evidence processed securely and confidentially' },
-          { icon: Globe, title: 'Comprehensive', desc: 'Text, URL, image, and audio analysis' },
+          { icon: Globe, title: 'Comprehensive', desc: 'Text, URL, image, audio, and video analysis' },
         ].map(({ icon: Icon, title, desc }) => (
           <div
             key={title}

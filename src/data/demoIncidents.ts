@@ -1,4 +1,4 @@
-import { IncidentCase } from '../types';
+import { IncidentCase, EvidenceItem } from '../types';
 
 export const DEMO_INCIDENTS: IncidentCase[] = [
   {
@@ -58,6 +58,49 @@ export const DEMO_INCIDENTS: IncidentCase[] = [
           'MFA Prompt Fatigue Attack pattern',
           'Sign-in initiated from unfamiliar GeoIP'
         ]
+      },
+      {
+        id: 'ev-4',
+        type: 'audio',
+        title: 'Voicemail Audio Spoof Analysis',
+        content: 'Incoming voicemail recording claiming immediate legal action and arrest warrant if funds are not transferred. Acoustic frequency analysis indicates synthetic voice cloning artifacts.',
+        timestamp: '10:21 AM',
+        source: '+1 (800) 555-0192 (Voicemail Recording)',
+        riskScore: 68,
+        riskLevel: 'Medium',
+        indicators: [
+          'AI-generated voice clone heuristics',
+          'Acoustic pitch consistency anomaly',
+          'Urgent legal coercion script'
+        ],
+        metadata: {
+          'Audio Fingerprint': 'Neural TTS Synthesis Match (Confidence: 89%)',
+          'Caller ID': 'Spoofed VOIP Shortcode',
+          'Threat Category': 'Voice Cloning / Vishing'
+        }
+      },
+      {
+        id: 'ev-video-1',
+        type: 'video',
+        title: 'Synthetic Media / Deepfake Video Fabrication',
+        content: 'Forensic video stream analysis of received mp4 recording (duration: 00:24, 1080p30). Manipulation index: 84/100 (Likely edited or morphed deepfake). Frame-by-frame analysis detected synthetic facial synthesis and audio desynchronization.',
+        timestamp: '10:22 AM',
+        source: 'Attached media (compromised_cam_feed.mp4)',
+        riskScore: 68,
+        riskLevel: 'High',
+        indicators: [
+          '84% manipulation likelihood (Likely morphed)',
+          'Facial movement inconsistency in frames 142-168',
+          'Audio-visual sync mismatch (phoneme latency: 180ms)',
+          'Synthetic generative artifacts along jaw boundary'
+        ],
+        metadata: {
+          'Manipulation Score': '84/100 (Likely edited or morphed)',
+          'Temporal Artifacts': 'Phase distortion detected (frames 142-168)',
+          'Audio Sync Mismatch': '180ms phoneme-viseme desynchronization',
+          'Forensic Verdict': 'Likely edited or morphed',
+          'Analysis Mode': 'Forensic Deepfake Detection'
+        }
       }
     ],
     timeline: [
@@ -94,7 +137,7 @@ export const DEMO_INCIDENTS: IncidentCase[] = [
         phase: 'Containment',
         title: 'SafeGuard AI Triage & Action Plan Generated',
         description: 'Incident preserved, sessions revoked, domain reported to Google Safe Browsing and registrar.',
-        relatedEvidenceIds: ['ev-1', 'ev-2', 'ev-3'],
+        relatedEvidenceIds: ['ev-1', 'ev-2', 'ev-3', 'ev-4', 'ev-video-1'],
         severity: 'low'
       }
     ],
@@ -141,7 +184,9 @@ export const DEMO_INCIDENTS: IncidentCase[] = [
       tacticsObserved: [
         'Adversary-in-the-Middle (AiTM) Proxy Phishing',
         'MFA Prompt Fatigue / Fatigue Bombing',
-        'Smishing via spoofed shortcode'
+        'Smishing via spoofed shortcode',
+        'Voice Cloning / Acoustic Impersonation',
+        'Synthetic Media / Deepfake Video Fabrication'
       ],
       potentialImpact: 'High risk of unauthorized email / workspace access if session cookie or MFA push was accepted.',
       originAssessment: 'Automated phishing infrastructure hosted on bulletproof European range with Namecheap proxy.',

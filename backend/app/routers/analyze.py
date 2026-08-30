@@ -262,39 +262,57 @@ def _parse_eml_bytes(raw: bytes) -> dict:
 
 
 @router.post("/video", response_model=InvestigationResultSchema)
-async def analyze_video_endpoint(request: Request):
+async def analyze_video_upload_endpoint(
+    file: UploadFile = File(...),
+):
     """
     POST /api/analyze/video
-    Multimodal video evidence analysis (visual + audio) via Gemini Files API.
-    Accepts either JSON with base64 video data or a multipart file upload.
+    Multimodal video evidence deepfake and manipulation detection.
+    Accepts multipart file upload only.
     """
     start_time = time.time()
     try:
-        video_bytes = None
-        mime_type = "video/mp4"
-
-        content_type = request.headers.get("content-type", "").lower()
-
-        if "application/json" in content_type:
-            body = await request.json()
-            video_b64 = body.get("video_b64")
-            mime_type = body.get("mime_type") or "video/mp4"
-            if video_b64:
-                clean_b64 = video_b64.split(",", 1)[-1]
-                try:
-                    video_bytes = base64.b64decode(clean_b64)
-                except Exception:
-                    raise HTTPException(status_code=400, detail="Invalid video_b64 encoding.")
-
-        elif "multipart/form-data" in content_type:
-            form = await request.form()
-            uploaded_file = form.get("file")
-            if uploaded_file is not None and hasattr(uploaded_file, "read"):
-                video_bytes = await uploaded_file.read()
-                mime_type = getattr(uploaded_file, "content_type", None) or "video/mp4"
+        video_bytes = await file.read()
+        mime_type = file.content_type or "video/mp4"
 
         if not video_bytes:
-            raise HTTPException(status_code=400, detail="Must provide a video file upload or video_b64 string.")
+            raise HTTPException(status_code=400, detail="Must provide a video file upload.")
+
+        result = ai_service.analyze_video(video_bytes, mime_type=mime_type)
+        duration_ms = int((time.time() - start_time) * 1000)
+        bigquery_service.log_event(
+            event_name="analysis_completed",
+            incident_id=result.incident_id,
+            threat_type=result.threat_type,
+            risk_level=result.risk_level,
+            confidence=result.confidence,
+            evidence_type="video",
+            analysis_duration_ms=duration_ms
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=str(err))
+
+
+@router.post("/video/base64", response_model=InvestigationResultSchema)
+async def analyze_video_base64_endpoint(
+    payload: VideoAnalysisRequest = Body(...),
+):
+    """
+    POST /api/analyze/video/base64
+    Multimodal video evidence deepfake and manipulation detection.
+    Accepts JSON body with base64-encoded video (video_b64, mime_type).
+    """
+    start_time = time.time()
+    try:
+        if not payload.video_b64:
+            raise HTTPException(status_code=400, detail="Must provide a video_b64 string.")
+
+        clean_b64 = payload.video_b64.split(",")[-1]
+        video_bytes = base64.b64decode(clean_b64)
+        mime_type = payload.mime_type or "video/mp4"
 
         result = ai_service.analyze_video(video_bytes, mime_type=mime_type)
         duration_ms = int((time.time() - start_time) * 1000)
