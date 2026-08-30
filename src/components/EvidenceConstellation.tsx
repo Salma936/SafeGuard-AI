@@ -141,6 +141,7 @@ function EvidenceConstellation({
     // This way it always has valid, real dimensions even if the CSS layout reports
     // a clipped/zero rect due to overflow:hidden on an ancestor.
     // -------------------------------------------------------------------------
+    let firstFrame = true; // used to emit a one-time diagnostic log per effect run
     const draw = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const dpr = window.devicePixelRatio || 1;
@@ -156,10 +157,25 @@ function EvidenceConstellation({
         return;
       }
 
+      // One-time log: confirms backing-buffer dimensions at the moment drawing
+      // actually begins. Useful to verify Safari received a real size from remeasure().
+      if (firstFrame) {
+        console.log('[EvidenceConstellation] draw() first frame →', {
+          width,
+          height,
+          dpr,
+          canvasW: canvas.width,
+          canvasH: canvas.height,
+          ua: navigator.userAgent.match(/(Chrome|Safari|Firefox|Edge)\/[\d.]+/)?.[0] ?? 'unknown',
+        });
+        firstFrame = false;
+      }
+
       ctx.clearRect(0, 0, width, height);
 
       const cx = width / 2;
       const cy = height / 2 - 6;
+
       const orbitRadius = Math.min(width, height) * 0.37;
 
       // 1. Connecting Lines & Hash Verification Packets

@@ -2365,11 +2365,32 @@ export const InvestigationWorkspace: React.FC<
                         transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                         className="overflow-hidden"
                         onAnimationComplete={(definition) => {
-                          // Only fire on the expand animation (animate), not on exit.
-                          // At this point height:'auto' has settled so getBoundingClientRect
-                          // returns real dimensions.
+                          // Diagnostic: confirm when this fires and with what value.
+                          // In Chrome this typically fires after layout has settled;
+                          // in Safari/WebKit it can fire before the layout engine has
+                          // committed the new height, so getBoundingClientRect may
+                          // still return 0×0 at this exact moment.
+                          console.log(
+                            '[InvestigationWorkspace] onAnimationComplete',
+                            definition,
+                            new Date().toISOString(),
+                          );
+
                           if (definition === 'animate') {
+                            // Immediate call — works reliably in Chrome/Blink.
                             constellationRef.current?.remeasure();
+
+                            // Safari/WebKit fallback: wait two animation frames so the
+                            // browser has a chance to commit the new layout and paint,
+                            // then try again with a 80ms buffer on top for good measure.
+                            // remeasure() is idempotent — calling it twice is harmless.
+                            requestAnimationFrame(() => {
+                              requestAnimationFrame(() => {
+                                setTimeout(() => {
+                                  constellationRef.current?.remeasure();
+                                }, 80);
+                              });
+                            });
                           }
                         }}
                       >
