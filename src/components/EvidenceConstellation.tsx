@@ -29,6 +29,28 @@ interface SatelliteNode {
   packetSpeed: number;
 }
 
+// Fallback for Safari < 16.4 where CanvasRenderingContext2D.prototype.roundRect is not supported
+function drawRoundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, w, h, r);
+  } else {
+    const radius = Math.min(r, w / 2, h / 2);
+    ctx.moveTo(x + radius, y);
+    ctx.arcTo(x + w, y, x + w, y + h, radius);
+    ctx.arcTo(x + w, y + h, x, y + h, radius);
+    ctx.arcTo(x, y + h, x, y, radius);
+    ctx.arcTo(x, y, x + w, y, radius);
+    ctx.closePath();
+  }
+}
+
 export const EvidenceConstellation = forwardRef<ConstellationHandle, EvidenceConstellationProps>(
 function EvidenceConstellation({
   evidence = [],
@@ -76,12 +98,13 @@ function EvidenceConstellation({
     let animationFrameId: number;
 
     // -------------------------------------------------------------------------
-    // Size the canvas backing buffer from getBoundingClientRect.
+    // Size the canvas backing buffer from container / getBoundingClientRect.
     // Returns true if we got real (non-zero) dimensions, false if still collapsed.
     // ctx.setTransform resets the scale so re-applying dpr scale is always clean.
     // -------------------------------------------------------------------------
     const setCanvasDimensions = (): boolean => {
-      const rect = canvas.getBoundingClientRect();
+      const container = canvas.parentElement;
+      const rect = container ? container.getBoundingClientRect() : canvas.getBoundingClientRect();
       const w = rect.width;
       const h = rect.height;
 
@@ -313,7 +336,7 @@ function EvidenceConstellation({
 
         ctx.fillStyle = 'rgba(6, 8, 11, 0.75)';
         ctx.beginPath();
-        ctx.roundRect(pillX - 2, labelY - 11, pillWidth, pillHeight, 4);
+        drawRoundRect(ctx, pillX - 2, labelY - 11, pillWidth, pillHeight, 4);
         ctx.fill();
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
         ctx.lineWidth = 0.8;
@@ -404,6 +427,7 @@ function EvidenceConstellation({
         <canvas
           ref={canvasRef}
           className="w-full h-full block"
+          style={{ width: '100%', height: '100%' }}
         />
       </div>
 
