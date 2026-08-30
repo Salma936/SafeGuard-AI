@@ -30,7 +30,7 @@ export const Hero: React.FC<HeroProps> = ({ onNavigate, onScrollToSection }) => 
               <div className="inline-flex items-center gap-2 bg-[#0D1116] text-[#5FC9E8] px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide border border-[#5FC9E8]/30 w-fit shadow-[0_0_15px_rgba(95,201,232,0.1)]">
                 <LiveStatusIndicator size="sm" status="active" />
                 <span className="font-mono uppercase text-[11px] font-bold tracking-wider">
-                  AI DIGITAL SAFETY &amp; DEEPFAKE FORENSICS
+                  DEEPFAKE FORENSICS &amp; DIGITAL SAFETY
                 </span>
               </div>
             </motion.div>
