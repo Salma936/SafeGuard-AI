@@ -1,5 +1,14 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { EvidenceItem } from '../types';
+
+export interface ConstellationHandle {
+  /**
+   * Re-measure the canvas backing buffer and restart the draw loop.
+   * Call this after the parent accordion animation has fully settled so that
+   * getBoundingClientRect() returns real pixel dimensions (not 0×0).
+   */
+  remeasure: () => void;
+}
 
 interface EvidenceConstellationProps {
   evidence?: EvidenceItem[];
@@ -19,14 +28,19 @@ interface SatelliteNode {
   packetSpeed: number;
 }
 
-export const EvidenceConstellation: React.FC<EvidenceConstellationProps> = ({
+export const EvidenceConstellation = forwardRef<ConstellationHandle, EvidenceConstellationProps>(
+function EvidenceConstellation({
   evidence = [],
   caseTitle = 'Case Core',
   className = '',
-}) => {
+}, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Fallback if no evidence provided
+  // Stable ref to the remeasure function — set inside useEffect so it closes
+  // over the correct canvas/ctx/draw references from that effect run.
+  const remeasureRef = useRef<() => void>(() => {});
+
+  // Fallback demo data when no real evidence is passed
   const evidenceList = useMemo(() => {
     if (evidence && evidence.length > 0) {
       return evidence.slice(0, 8);
@@ -39,10 +53,13 @@ export const EvidenceConstellation: React.FC<EvidenceConstellationProps> = ({
     ] as EvidenceItem[];
   }, [evidence]);
 
-  const verifiedCount = useMemo(() => {
-    // Treat items analyzed / preserved as verified
-    return evidenceList.length;
-  }, [evidenceList]);
+  const verifiedCount = useMemo(() => evidenceList.length, [evidenceList]);
+
+  // Expose remeasure() imperatively so InvestigationWorkspace can call it
+  // from onAnimationComplete after the accordion finishes expanding.
+  useImperativeHandle(ref, () => ({
+    remeasure: () => remeasureRef.current(),
+  }));
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -55,42 +72,52 @@ export const EvidenceConstellation: React.FC<EvidenceConstellationProps> = ({
 
     let animationFrameId: number;
 
-    const setCanvasDimensions = () => {
-      if (!canvas) return;
+    // -------------------------------------------------------------------------
+    // Size the canvas backing buffer from getBoundingClientRect.
+    // Returns true if we got real (non-zero) dimensions, false if still collapsed.
+    // ctx.setTransform resets the scale so re-applying dpr scale is always clean.
+    // -------------------------------------------------------------------------
+    const setCanvasDimensions = (): boolean => {
       const rect = canvas.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+
+      // Log so we can verify in the browser console the dimensions are non-zero
+      console.log('[EvidenceConstellation] setCanvasDimensions →', { w, h });
+
+      if (w === 0 || h === 0) return false; // still inside a height:0 container
+
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+
+      // Reset transform before re-scaling (required after canvas.width/height change)
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.scale(dpr, dpr);
+      return true;
     };
 
-    setCanvasDimensions();
-    window.addEventListener('resize', setCanvasDimensions);
-
-    // Build satellite node configs
+    // -------------------------------------------------------------------------
+    // Build satellite node configs from evidence data
+    // -------------------------------------------------------------------------
     const count = Math.max(1, evidenceList.length);
     const satellites: SatelliteNode[] = evidenceList.map((item, idx) => {
-      let color = '#5FC9E8'; // verified / low
+      let color = '#5FC9E8';
       let status = 'verified';
 
       const riskScore = item.riskScore ?? 50;
       const riskLevel = item.riskLevel?.toLowerCase() ?? '';
 
       if (riskLevel === 'critical' || riskScore >= 80) {
-        color = '#D9705A';
-        status = 'high risk';
+        color = '#D9705A'; status = 'high risk';
       } else if (riskLevel === 'high' || riskScore >= 65) {
-        color = '#D9705A';
-        status = 'flagged';
+        color = '#D9705A'; status = 'flagged';
       } else if (riskLevel === 'medium' || riskScore >= 45) {
-        color = '#E0A458';
-        status = 'suspicious';
+        color = '#E0A458'; status = 'suspicious';
       } else {
-        color = '#5FC9E8';
-        status = 'verified';
+        color = '#5FC9E8'; status = 'verified';
       }
 
-      // Distribute angles symmetrically with a slight offset
       const baseAngle = (idx / count) * Math.PI * 2 - Math.PI / 2;
       const angle = baseAngle + (idx % 2 === 1 ? 0.08 : -0.08);
 
@@ -107,13 +134,27 @@ export const EvidenceConstellation: React.FC<EvidenceConstellationProps> = ({
       };
     });
 
-    let startTime = performance.now();
+    const startTime = performance.now();
 
+    // -------------------------------------------------------------------------
+    // DRAW — reads canvas.width/height (backing buffer px) NOT getBoundingClientRect.
+    // This way it always has valid, real dimensions even if the CSS layout reports
+    // a clipped/zero rect due to overflow:hidden on an ancestor.
+    // -------------------------------------------------------------------------
     const draw = (currentTime: number) => {
       const elapsed = currentTime - startTime;
-      const rect = canvas.getBoundingClientRect();
-      const width = rect.width;
-      const height = rect.height;
+      const dpr = window.devicePixelRatio || 1;
+
+      // Use the actual backing buffer dimensions (set by setCanvasDimensions)
+      // divided by dpr to get logical (CSS) pixel dimensions for drawing.
+      const width = canvas.width / dpr;
+      const height = canvas.height / dpr;
+
+      if (width === 0 || height === 0) {
+        // Canvas not sized yet — keep the loop alive; ResizeObserver/remeasure will fire
+        if (!prefersReducedMotion) animationFrameId = requestAnimationFrame(draw);
+        return;
+      }
 
       ctx.clearRect(0, 0, width, height);
 
@@ -121,12 +162,11 @@ export const EvidenceConstellation: React.FC<EvidenceConstellationProps> = ({
       const cy = height / 2 - 6;
       const orbitRadius = Math.min(width, height) * 0.37;
 
-      // 1. Draw Connecting Lines & Hash Verification Packets
+      // 1. Connecting Lines & Hash Verification Packets
       satellites.forEach((sat) => {
         const sx = cx + Math.cos(sat.angle) * orbitRadius * (sat.distanceRatio / 0.38);
         const sy = cy + Math.sin(sat.angle) * orbitRadius * (sat.distanceRatio / 0.38);
 
-        // Thin link line
         ctx.beginPath();
         ctx.moveTo(cx, cy);
         ctx.lineTo(sx, sy);
@@ -134,7 +174,6 @@ export const EvidenceConstellation: React.FC<EvidenceConstellationProps> = ({
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // Traveling hash verification packet
         if (!prefersReducedMotion) {
           sat.packetProgress = (sat.packetProgress + sat.packetSpeed) % 1;
         }
@@ -143,48 +182,40 @@ export const EvidenceConstellation: React.FC<EvidenceConstellationProps> = ({
         const px = cx + (sx - cx) * t;
         const py = cy + (sy - cy) * t;
 
-        // Packet glow
         const packetGlow = ctx.createRadialGradient(px, py, 0, px, py, 7);
         packetGlow.addColorStop(0, '#5FC9E8');
         packetGlow.addColorStop(0.4, 'rgba(95, 201, 232, 0.6)');
         packetGlow.addColorStop(1, 'rgba(95, 201, 232, 0)');
-
         ctx.fillStyle = packetGlow;
         ctx.beginPath();
         ctx.arc(px, py, 7, 0, Math.PI * 2);
         ctx.fill();
 
-        // Packet center dot
         ctx.beginPath();
         ctx.arc(px, py, 1.8, 0, Math.PI * 2);
         ctx.fillStyle = '#FFFFFF';
         ctx.fill();
       });
 
-      // 2. Draw Central "Core" Node (Breathing Scale ~1.6s period)
+      // 2. Central "Core" Node
       const coreBreath = prefersReducedMotion
         ? 1
         : 1 + Math.sin((elapsed / 1600) * Math.PI * 2) * 0.12;
-
       const coreRadius = 15 * coreBreath;
 
-      // Core outer radial glow
       const coreGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 38 * coreBreath);
       coreGlow.addColorStop(0, 'rgba(95, 201, 232, 0.35)');
       coreGlow.addColorStop(0.5, 'rgba(95, 201, 232, 0.1)');
       coreGlow.addColorStop(1, 'rgba(95, 201, 232, 0)');
-
       ctx.fillStyle = coreGlow;
       ctx.beginPath();
       ctx.arc(cx, cy, 38 * coreBreath, 0, Math.PI * 2);
       ctx.fill();
 
-      // Core body
       const coreFill = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius);
       coreFill.addColorStop(0, '#7EE0FA');
       coreFill.addColorStop(0.8, '#5FC9E8');
       coreFill.addColorStop(1, '#2B8AA8');
-
       ctx.fillStyle = coreFill;
       ctx.beginPath();
       ctx.arc(cx, cy, coreRadius, 0, Math.PI * 2);
@@ -194,19 +225,17 @@ export const EvidenceConstellation: React.FC<EvidenceConstellationProps> = ({
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Core inner pulse ring
       ctx.beginPath();
       ctx.arc(cx, cy, coreRadius * 0.45, 0, Math.PI * 2);
       ctx.fillStyle = '#FFFFFF';
       ctx.fill();
 
-      // Core Label
       ctx.font = '600 11px "JetBrains Mono", monospace';
       ctx.fillStyle = '#E8ECEF';
       ctx.textAlign = 'center';
       ctx.fillText('CASE CORE', cx, cy + coreRadius + 15);
 
-      // 3. Draw Satellite Nodes & Labels
+      // 3. Satellite Nodes & Labels
       satellites.forEach((sat) => {
         const sx = cx + Math.cos(sat.angle) * orbitRadius * (sat.distanceRatio / 0.38);
         const sy = cy + Math.sin(sat.angle) * orbitRadius * (sat.distanceRatio / 0.38);
@@ -214,21 +243,17 @@ export const EvidenceConstellation: React.FC<EvidenceConstellationProps> = ({
         const satPulse = prefersReducedMotion
           ? 1
           : 1 + Math.sin((elapsed / 1200) * Math.PI * 2 + sat.pulseOffset) * 0.15;
-
         const satRadius = 6.5 * satPulse;
 
-        // Satellite glow halo
         const satGlow = ctx.createRadialGradient(sx, sy, 0, sx, sy, 22);
         satGlow.addColorStop(0, `${sat.color}55`);
         satGlow.addColorStop(0.6, `${sat.color}15`);
         satGlow.addColorStop(1, `${sat.color}00`);
-
         ctx.fillStyle = satGlow;
         ctx.beginPath();
         ctx.arc(sx, sy, 22, 0, Math.PI * 2);
         ctx.fill();
 
-        // Satellite body
         ctx.fillStyle = sat.color;
         ctx.beginPath();
         ctx.arc(sx, sy, satRadius, 0, Math.PI * 2);
@@ -238,14 +263,11 @@ export const EvidenceConstellation: React.FC<EvidenceConstellationProps> = ({
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // Node Label (artifact type · status)
         ctx.font = '500 10px "JetBrains Mono", monospace';
         const labelText = `${sat.type} · ${sat.status}`;
 
-        // Determine text anchor based on node position
         const cos = Math.cos(sat.angle);
         const sin = Math.sin(sat.angle);
-
         let labelX = sx + cos * 12;
         let labelY = sy + sin * 12;
 
@@ -259,13 +281,9 @@ export const EvidenceConstellation: React.FC<EvidenceConstellationProps> = ({
           ctx.textAlign = 'center';
         }
 
-        if (sin > 0.4) {
-          labelY = sy + 16;
-        } else if (sin < -0.4) {
-          labelY = sy - 10;
-        }
+        if (sin > 0.4) labelY = sy + 16;
+        else if (sin < -0.4) labelY = sy - 10;
 
-        // Draw label background pill for crisp legibility
         const textMetrics = ctx.measureText(labelText);
         const pillWidth = textMetrics.width + 10;
         const pillHeight = 16;
@@ -281,7 +299,6 @@ export const EvidenceConstellation: React.FC<EvidenceConstellationProps> = ({
         ctx.lineWidth = 0.8;
         ctx.stroke();
 
-        // Draw label text
         ctx.fillStyle = '#E8ECEF';
         ctx.fillText(labelText, labelX, labelY);
       });
@@ -291,13 +308,41 @@ export const EvidenceConstellation: React.FC<EvidenceConstellationProps> = ({
       }
     };
 
+    // -------------------------------------------------------------------------
+    // Assign remeasureRef BEFORE starting the animation loop so it is always
+    // callable. onAnimationComplete in InvestigationWorkspace calls this after
+    // the accordion expand fully settles — at that point getBoundingClientRect()
+    // returns real dimensions, setCanvasDimensions succeeds, and draw() starts
+    // with a properly-sized backing buffer.
+    // -------------------------------------------------------------------------
+    remeasureRef.current = () => {
+      const ok = setCanvasDimensions();
+      if (ok) {
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        animationFrameId = requestAnimationFrame(draw);
+      }
+    };
+
+    // Attempt initial measure — may return false if still inside height:0
+    setCanvasDimensions();
+
+    // ResizeObserver on the parent container (the element whose height changes
+    // during the AnimatePresence transition — the canvas has CSS 100%/100%).
+    const container = canvas.parentElement;
+    const resizeObserver = new ResizeObserver(() => {
+      const ok = setCanvasDimensions();
+      if (ok && !animationFrameId) {
+        animationFrameId = requestAnimationFrame(draw);
+      }
+    });
+    if (container) resizeObserver.observe(container);
+
+    // Start the animation loop — draw() guards against 0×0 and loops until sized
     animationFrameId = requestAnimationFrame(draw);
 
     return () => {
-      window.removeEventListener('resize', setCanvasDimensions);
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
+      resizeObserver.disconnect();
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
   }, [evidenceList]);
 
@@ -344,4 +389,4 @@ export const EvidenceConstellation: React.FC<EvidenceConstellationProps> = ({
       </div>
     </div>
   );
-};
+});
