@@ -48,6 +48,7 @@ export interface ActionItem {
   isCompleted: boolean;
   actionType: 'external_link' | 'copy_text' | 'checklist' | 'guide';
   actionTarget?: string;
+  actionLinks?: Array<{ label: string; url: string }>;
 }
 
 export interface IncidentCase {
@@ -87,6 +88,7 @@ export interface ThreatAnalysisResult {
     | 'Financial Fraud'
     | 'Identity Theft'
     | 'Other Suspicious Activity';
+  coercive_media_threat_detected?: boolean;
   summary: string;
   explanation: string;
   explanation_simple?: string;
@@ -100,6 +102,7 @@ export interface ThreatAnalysisResult {
     priority: 'urgent' | 'high' | 'recommended';
     category: 'Immediate Containment' | 'Account Security' | 'Evidence Preservation' | 'Recovery & Reporting';
     actionTarget?: string;
+    actionLinks?: Array<{ label: string; url: string }>;
   }>;
   affected_accounts: string[];
   evidence_relationships: Array<{

@@ -25,6 +25,7 @@ class ActionItemSchema(BaseModel):
     priority: Literal["urgent", "high", "recommended"] = "high"
     category: Literal["Immediate Containment", "Account Security", "Evidence Preservation", "Recovery & Reporting"] = "Immediate Containment"
     actionTarget: Optional[str] = None
+    actionLinks: Optional[List[Dict[str, str]]] = None
 
 class EvidenceRelationshipSchema(BaseModel):
     source_id: str
@@ -47,6 +48,7 @@ class InvestigationResultSchema(BaseModel):
     risk_score: int = Field(ge=0, le=100, default=75)
     confidence: int = Field(ge=0, le=100, default=90)
     threat_type: ThreatType
+    coercive_media_threat_detected: bool = Field(default=False)
     summary: str
     explanation: str
     explanation_simple: Optional[str] = None

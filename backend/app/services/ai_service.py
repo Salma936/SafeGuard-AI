@@ -2,12 +2,53 @@ import json
 import uuid
 import time
 import base64
+import re
 from typing import Dict, Any, Optional
 from backend.app.config import settings
 from backend.app.schemas import (
     InvestigationResultSchema, ActionItemSchema,
     EvidenceRelationshipSchema, TimelineEventSchema
 )
+
+def detect_coercive_media_threat(text: str) -> bool:
+    """
+    Lightweight heuristic layer detecting if communication contains BOTH:
+    1. Coercion / extortion signal (payment demand, blackmail, leak threat)
+    2. Private / intimate / sensitive personal media threat (photos, videos, recordings)
+    """
+    if not text or not isinstance(text, str):
+        return False
+    t = text.lower()
+
+    # 1. Private / Intimate Media Concepts
+    media_patterns = [
+        r'\b(?:private|intimate|nude|nudes|explicit|sexual|compromising|sensitive|personal|secret|illicit)\s+(?:photos?|pics?|pictures?|videos?|recordings?|footage|images?|media|content|clips?)\b',
+        r'\b(?:photos?|pics?|pictures?|videos?|recordings?|footage|images?|media|clips?)\s+of\s+you\s+(?:naked|undressed|in\s+private)\b',
+        r'\b(?:webcam|front\s*camera|camera)\s+(?:footage|recording|video|recordings)\b',
+        r'\b(?:split-screen\s+video|masturbat\w*|explicit\s+material)\b',
+        r'\b(?:nudes|intimate\s+footage|private\s+data\s+and\s+photos?)\b'
+    ]
+    has_media = any(re.search(p, t) for p in media_patterns)
+    if not has_media and re.search(r'\b(?:recorded\s+you|compromised\s+your\s+(?:device|camera|webcam))\b', t) and re.search(r'\b(?:video|footage|recording|photos?|pics?)\b', t):
+        has_media = True
+
+    if not has_media:
+        return False
+
+    # 2. Coercion / Extortion Concepts
+    coercion_patterns = [
+        r'\b(?:pay|send|transfer|give)\s+(?:me\s+)?(?:[\$€£₹]|\d+|money|cash|bitcoin|btc|crypto|funds|ransom)\b',
+        r'\b(?:pay\s+me|give\s+me\s+money|send\s+money|pay\s+or|unless\s+you\s+pay|if\s+you\s+don[\'’]?t\s+pay)\b',
+        r'\b(?:post|leak|upload|release|distribute|publish|spread|broadcast|share)\s+(?:it|them|this|everything|everywhere|those|your)\b',
+        r'\b(?:send\s+(?:this|it|them|the\s+\w+)\s+to\s+(?:your|all|everyone|contacts|family|friends|colleagues|social|followers|relatives))\b',
+        r'\b(?:expose\s+you|ruin\s+your\s+reputation|destroy\s+your\s+life|show\s+(?:everyone|your\s+family))\b',
+        r'\b(?:everyone\s+will\s+see|all\s+your\s+(?:friends|contacts|family)\s+will\s+see)\b',
+        r'\b(?:or\s+I[\'’]?ll\s+(?:post|leak|send|upload|release|expose|share|show))\b',
+        r'\b(?:comply\s+with|meet\s+my\s+demands?|extortion|blackmail)\b'
+    ]
+    has_coercion = any(re.search(p, t) for p in coercion_patterns)
+
+    return has_media and has_coercion
 
 try:
     from google import genai
@@ -35,6 +76,7 @@ Respond strictly with a single JSON object matching this exact schema:
   "risk_score": number between 0 and 100,
   "confidence": number between 0 and 100,
   "threat_type": "Phishing" | "Social Engineering" | "Scam" | "Harassment" | "Impersonation" | "Account Takeover Attempt" | "Malicious Link" | "Sextortion / Coercion" | "Financial Fraud" | "Identity Theft" | "Other Suspicious Activity",
+  "coercive_media_threat_detected": boolean,
   "summary": "Concise high-level incident summary",
   "explanation": "Clear, rigorous forensic explanation of what this content is trying to achieve and why it is suspicious.",
   "explanation_simple": "One or two reassuring, plain-English sentences for a non-technical user explaining what is happening.",
@@ -134,7 +176,7 @@ class AIService:
         prompt = f"Incident ID: {inc_id}\n\nAnalyze the following suspicious message text:\n\n\"\"\"\n{text.strip()}\n\"\"\""
         
         raw_json = self._call_gemini([prompt])
-        return self._parse_and_sanitize(raw_json, inc_id, fallback_threat="Phishing")
+        return self._parse_and_sanitize(raw_json, inc_id, fallback_threat="Phishing", text_content=text)
 
     def analyze_url(self, url: str, incident_id: Optional[str] = None) -> InvestigationResultSchema:
         """Analyze suspicious URL for domain impersonation, credential harvesting, and suspicious patterns."""
@@ -330,18 +372,28 @@ Task:
         raw_json = self._call_gemini([prompt])
         return self._parse_and_sanitize(raw_json, incident_id, fallback_threat="Other Suspicious Activity")
 
-    def _parse_and_sanitize(self, raw_json: str, incident_id: str, fallback_threat: str) -> InvestigationResultSchema:
+    def _parse_and_sanitize(self, raw_json: str, incident_id: str, fallback_threat: str, text_content: Optional[str] = None) -> InvestigationResultSchema:
         """Parse Gemini output JSON and enforce strict schema defaults."""
         try:
             data = json.loads(raw_json)
         except Exception:
             data = {}
 
+        coercive_detected = data.get("coercive_media_threat_detected")
+        if coercive_detected is None:
+            coercive_detected = detect_coercive_media_threat(text_content or "")
+        elif not coercive_detected and text_content:
+            if detect_coercive_media_threat(text_content):
+                coercive_detected = True
+
         risk_level = data.get("risk_level", "HIGH")
         if risk_level not in ["LOW", "MEDIUM", "HIGH", "CRITICAL"]:
             risk_level = "HIGH"
 
         threat_type = data.get("threat_type", fallback_threat)
+        if coercive_detected:
+            threat_type = "Sextortion / Coercion"
+
         valid_threats = [
             "Phishing", "Social Engineering", "Scam", "Harassment",
             "Impersonation", "Account Takeover Attempt", "Malicious Link",
@@ -360,6 +412,22 @@ Task:
                     priority=act.get("priority", "high"),
                     category=act.get("category", "Immediate Containment"),
                     actionTarget=act.get("actionTarget")
+                ))
+
+        if coercive_detected:
+            has_sextortion_action = any("sextortion" in a.title.lower() for a in actions)
+            if not has_sextortion_action:
+                actions.insert(0, ActionItemSchema(
+                    id=f"act-sextortion-{uuid.uuid4().hex[:6]}",
+                    title="This looks like sextortion — get help removing it",
+                    description="Someone may be threatening to distribute private personal media unless you comply with their demands. This is a form of online extortion. Do not pay or send additional material. Preserve the evidence and seek help from an established support service.",
+                    priority="urgent",
+                    category="Immediate Containment",
+                    actionTarget="https://stopncii.org/",
+                    actionLinks=[
+                        {"label": "Adults: StopNCII.org →", "url": "https://stopncii.org/"},
+                        {"label": "For content created when someone was under 18: NCMEC's Take It Down →", "url": "https://takeitdown.ncmec.org/"}
+                    ]
                 ))
 
         if not actions:
@@ -431,6 +499,7 @@ Task:
             risk_score=max(0, min(100, int(data.get("risk_score", 75)))),
             confidence=max(0, min(100, int(data.get("confidence", 90)))),
             threat_type=threat_type,
+            coercive_media_threat_detected=bool(coercive_detected),
             summary=data.get("summary", "Suspicious digital communication pattern detected."),
             explanation=data.get("explanation", "Forensic analysis detected indicators of malicious intent or deceptive social engineering."),
             explanation_simple=data.get("explanation_simple", "This communication shows warning signs of a scam or impersonation attempt."),

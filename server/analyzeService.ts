@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { GoogleGenAI } from '@google/genai';
 import { ThreatAnalysisResult } from '../src/types';
+import { detectCoerciveMediaThreat } from '../src/utils/threatClassifier';
 
 let aiInstance: GoogleGenAI | null = null;
 
@@ -33,6 +34,7 @@ Respond strictly with a single JSON object matching this exact schema:
   "risk_score": number between 0 and 100,
   "confidence": number between 0 and 100,
   "threat_type": "Phishing" | "Social Engineering" | "Scam" | "Harassment" | "Impersonation" | "Account Takeover Attempt" | "Malicious Link" | "Sextortion / Coercion" | "Financial Fraud" | "Identity Theft" | "Other Suspicious Activity",
+  "coercive_media_threat_detected": boolean,
   "summary": "Concise summary",
   "explanation": "Clear, rigorous forensic explanation of what this content is trying to achieve.",
   "explanation_simple": "One or two reassuring plain-English sentences for non-technical users.",
@@ -58,7 +60,7 @@ Respond strictly with a single JSON object matching this exact schema:
 }
 `;
 
-function sanitizeResult(parsed: any, defaultThreat: any): ThreatAnalysisResult {
+function sanitizeResult(parsed: any, defaultThreat: any, originalText?: string): ThreatAnalysisResult {
   const validRiskLevels = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
   const validThreatTypes = [
     'Phishing',
@@ -74,8 +76,14 @@ function sanitizeResult(parsed: any, defaultThreat: any): ThreatAnalysisResult {
     'Other Suspicious Activity'
   ] as const;
 
+  const isCoercive =
+    parsed.coercive_media_threat_detected === true ||
+    (originalText ? detectCoerciveMediaThreat(originalText) : false);
+
   const riskLevel = validRiskLevels.includes(parsed.risk_level) ? parsed.risk_level : 'HIGH';
-  const threatType = validThreatTypes.includes(parsed.threat_type) ? parsed.threat_type : defaultThreat;
+  const threatType = isCoercive
+    ? 'Sextortion / Coercion'
+    : (validThreatTypes.includes(parsed.threat_type) ? parsed.threat_type : defaultThreat);
 
   const actions = Array.isArray(parsed.recommended_actions) && parsed.recommended_actions.length > 0
     ? parsed.recommended_actions.map((act: any, idx: number) => ({
@@ -95,6 +103,26 @@ function sanitizeResult(parsed: any, defaultThreat: any): ThreatAnalysisResult {
           category: 'Immediate Containment' as const
         }
       ];
+
+  if (isCoercive) {
+    const hasSextortionCard = actions.some((a: any) =>
+      a.title && a.title.toLowerCase().includes('sextortion')
+    );
+    if (!hasSextortionCard) {
+      actions.unshift({
+        id: `act-sextortion-${Date.now()}`,
+        title: 'This looks like sextortion — get help removing it',
+        description:
+          'Someone may be threatening to distribute private personal media unless you comply with their demands. This is a form of online extortion. Do not pay or send additional material. Preserve the evidence and seek help from an established support service.',
+        priority: 'urgent' as const,
+        category: 'Immediate Containment' as const,
+        actionLinks: [
+          { label: 'Adults: StopNCII.org →', url: 'https://stopncii.org/' },
+          { label: "For content created when someone was under 18: NCMEC's Take It Down →", url: 'https://takeitdown.ncmec.org/' }
+        ]
+      });
+    }
+  }
 
   const timeline = Array.isArray(parsed.timeline_events) && parsed.timeline_events.length > 0
     ? parsed.timeline_events.map((t: any, idx: number) => ({
@@ -124,6 +152,7 @@ function sanitizeResult(parsed: any, defaultThreat: any): ThreatAnalysisResult {
     risk_score: typeof parsed.risk_score === 'number' ? Math.max(0, Math.min(100, parsed.risk_score)) : 75,
     confidence: typeof parsed.confidence === 'number' ? Math.max(0, Math.min(100, parsed.confidence)) : 90,
     threat_type: threatType,
+    coercive_media_threat_detected: isCoercive,
     summary: parsed.summary || 'Suspicious communication pattern detected.',
     explanation: parsed.explanation || 'Forensic analysis identified deceptive tactics or threat indicators.',
     explanation_simple: parsed.explanation_simple || 'This message contains warning signs of an online scam or phishing attempt.',
@@ -167,7 +196,7 @@ export async function analyzeSuspiciousMessage(message: string): Promise<ThreatA
   });
 
   const parsed = JSON.parse(response.text || '{}');
-  return sanitizeResult(parsed, 'Phishing');
+  return sanitizeResult(parsed, 'Phishing', message);
 }
 
 export async function analyzeSuspiciousUrl(url: string): Promise<ThreatAnalysisResult> {

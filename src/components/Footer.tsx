@@ -127,6 +127,22 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenModal, onScrol
             </button>
           </div>
         </div>
+
+        {/* Ownership & Portfolio Credit */}
+        <div className="mt-6 pt-4 border-t border-white/[0.04] flex items-center justify-center text-center text-[11px] text-[#5A6672]">
+          <p id="footer-credit" className="tracking-normal font-sans">
+            &copy; 2026 Salma P. &middot; Designed &amp; built by Salma P. &middot;{' '}
+            <a
+              id="footer-portfolio-link"
+              href="https://portfolio-omega-mauve-23.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#5FC9E8] hover:text-[#8ee1f9] transition-colors underline-offset-2 hover:underline inline-flex items-center gap-0.5 font-medium"
+            >
+              Portfolio ↗
+            </a>
+          </p>
+        </div>
       </div>
     </footer>
   );

@@ -51,6 +51,7 @@ import {
   addIncidentEvidence
 } from '../services/api';
 import { MAX_VIDEO_SIZE_BYTES, isVideoFile, readFileAsBase64 } from '../utils/fileUtils';
+import { detectCoerciveMediaThreat } from '../utils/threatClassifier';
 import { LiveStatusIndicator } from './LiveStatusIndicator';
 import { ThreatIndexGauge } from './ThreatIndexGauge';
 import { MiniRiskGauge } from './MiniRiskGauge';
@@ -575,21 +576,30 @@ export const InvestigationWorkspace: React.FC<
                 : 'low'
       };
 
-      const newActions: ActionItem[] =
+      const isCoercive =
+        result.coercive_media_threat_detected === true ||
+        detectCoerciveMediaThreat(originalText);
+
+      const effectiveThreatType = isCoercive
+        ? 'Sextortion / Coercion'
+        : result.threat_type;
+
+      let newActions: ActionItem[] =
         result.recommended_actions &&
           result.recommended_actions.length > 0
           ? result.recommended_actions.map((act, idx) => ({
-            id: `act-ai-${Date.now()}-${idx}`,
+            id: act.id || `act-ai-${Date.now()}-${idx}`,
             category:
               act.category || 'Immediate Containment',
             title: act.title,
             description: act.description,
             priority: act.priority || 'high',
             isCompleted: false,
-            actionType: act.actionTarget
+            actionType: (act.actionLinks && act.actionLinks.length > 0) || act.actionTarget
               ? 'external_link'
               : 'guide',
-            actionTarget: act.actionTarget
+            actionTarget: act.actionTarget,
+            actionLinks: act.actionLinks
           }))
           : [
             {
@@ -605,34 +615,86 @@ export const InvestigationWorkspace: React.FC<
             }
           ];
 
-      setActiveCase((prev) => ({
-        ...prev,
-        title: `Live Investigation: ${result.threat_type} (${result.risk_level} Risk)`,
-        category: result.threat_type,
-        summary:
-          result.explanation_simple || result.explanation,
-        overallRisk: riskLevelCapitalized,
-        riskScore: result.risk_score,
-        status: 'Investigating',
-        evidence: [newEv, ...prev.evidence],
-        timeline: [newTimeline, ...prev.timeline],
-        actionPlan: [...newActions, ...prev.actionPlan],
-        synthesis: {
-          tacticsObserved:
-            result.tactics_observed &&
-              result.tactics_observed.length > 0
-              ? result.tactics_observed
-              : [result.threat_type],
-          potentialImpact:
-            result.potential_impact ||
-            prev.synthesis.potentialImpact,
-          originAssessment:
-            result.origin_assessment ||
-            prev.synthesis.originAssessment,
-          recommendedLegalSteps:
-            prev.synthesis.recommendedLegalSteps
+      if (isCoercive) {
+        const alreadyHasSextortionCard = newActions.some((a) =>
+          a.title.toLowerCase().includes('sextortion')
+        );
+        if (!alreadyHasSextortionCard) {
+          const sextortionAction: ActionItem = {
+            id: `act-sextortion-${Date.now()}`,
+            category: 'Immediate Containment',
+            title: 'This looks like sextortion — get help removing it',
+            description:
+              'Someone may be threatening to distribute private personal media unless you comply with their demands. This is a form of online extortion. Do not pay or send additional material. Preserve the evidence and seek help from an established support service.',
+            priority: 'urgent',
+            isCompleted: false,
+            actionType: 'external_link',
+            actionLinks: [
+              {
+                label: 'Adults: StopNCII.org →',
+                url: 'https://stopncii.org/'
+              },
+              {
+                label: "For content created when someone was under 18: NCMEC's Take It Down →",
+                url: 'https://takeitdown.ncmec.org/'
+              }
+            ]
+          };
+          newActions = [sextortionAction, ...newActions];
         }
-      }));
+      }
+
+      const priorityRank = (priority: string) => {
+        const p = priority?.toLowerCase();
+        if (p === 'urgent') return 0;
+        if (p === 'high') return 1;
+        if (p === 'recommended' || p === 'medium') return 2;
+        return 3;
+      };
+
+      setActiveCase((prev) => {
+        const combinedActions = [...newActions, ...prev.actionPlan];
+        const seenSextortion = new Set<string>();
+        const deduplicatedActions = combinedActions.filter((a) => {
+          if (a.title === 'This looks like sextortion — get help removing it') {
+            if (seenSextortion.has(a.title)) return false;
+            seenSextortion.add(a.title);
+          }
+          return true;
+        });
+        const sortedActions = deduplicatedActions.sort(
+          (a, b) => priorityRank(a.priority) - priorityRank(b.priority)
+        );
+
+        return {
+          ...prev,
+          title: `Live Investigation: ${effectiveThreatType} (${result.risk_level} Risk)`,
+          category: effectiveThreatType,
+          summary:
+            result.explanation_simple || result.explanation,
+          overallRisk: riskLevelCapitalized,
+          riskScore: result.risk_score,
+          status: 'Investigating',
+          evidence: [newEv, ...prev.evidence],
+          timeline: [newTimeline, ...prev.timeline],
+          actionPlan: sortedActions,
+          synthesis: {
+            tacticsObserved:
+              result.tactics_observed &&
+                result.tactics_observed.length > 0
+                ? result.tactics_observed
+                : [effectiveThreatType],
+            potentialImpact:
+              result.potential_impact ||
+              prev.synthesis.potentialImpact,
+            originAssessment:
+              result.origin_assessment ||
+              prev.synthesis.originAssessment,
+            recommendedLegalSteps:
+              prev.synthesis.recommendedLegalSteps
+          }
+        };
+      });
 
       setAnalysisSuccess(
         `Analyzed as "${result.threat_type}" (${result.risk_level} Risk, ${result.confidence}% Confidence). Investigation workspace updated.`
@@ -2088,7 +2150,25 @@ export const InvestigationWorkspace: React.FC<
                               {act.description}
                             </p>
 
-                            {act.actionTarget && (
+                            {act.actionLinks && act.actionLinks.length > 0 ? (
+                              <div className="mt-2.5 flex flex-col gap-1.5">
+                                {act.actionLinks.map((link, lIdx) => (
+                                  <a
+                                    key={lIdx}
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) =>
+                                      e.stopPropagation()
+                                    }
+                                    className="inline-flex max-w-full items-center gap-1.5 break-words text-xs font-semibold text-[#5FC9E8] hover:text-[#8ee1f9] transition-colors"
+                                  >
+                                    <span>{link.label}</span>
+                                    <ExternalLink className="h-3 w-3 shrink-0" />
+                                  </a>
+                                ))}
+                              </div>
+                            ) : act.actionTarget ? (
                               <a
                                 href={
                                   act.actionTarget
@@ -2105,7 +2185,7 @@ export const InvestigationWorkspace: React.FC<
                                 </span>
                                 <ExternalLink className="h-3 w-3 shrink-0" />
                               </a>
-                            )}
+                            ) : null}
 
                           </div>
 
