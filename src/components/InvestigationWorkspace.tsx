@@ -2306,11 +2306,11 @@ export const InvestigationWorkspace: React.FC<
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                   onClick={() => onNavigate('screenshot-analyzer')}
-                  className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#0D1116] px-3 py-2 text-xs font-semibold text-[#7A8794] hover:text-[#E8ECEF] hover:border-white/[0.18] transition-colors"
+                  className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.12] bg-[#0D1116] px-3 py-2 text-xs font-semibold text-white hover:text-white hover:border-white/[0.22] transition-colors"
                   title="Deep ELA & Image Manipulation Forensics"
                 >
                   <FileCheck className="h-3.5 w-3.5 text-[#5FC9E8]" />
-                  <span>Image Forensics</span>
+                  <span className="text-white">Image Forensics</span>
                 </motion.button>
 
                 <motion.button
@@ -2318,10 +2318,10 @@ export const InvestigationWorkspace: React.FC<
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                   onClick={handleExportReport}
-                  className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#0D1116] px-3 py-2 text-xs font-semibold text-[#7A8794] hover:text-[#E8ECEF] transition-colors"
+                  className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.12] bg-[#0D1116] px-3 py-2 text-xs font-semibold text-white hover:text-white hover:border-white/[0.22] transition-colors"
                 >
                   <Download className="h-3.5 w-3.5 text-[#5FC9E8]" />
-                  <span className="hidden md:inline">
+                  <span className="hidden md:inline text-white">
                     Export
                   </span>
                 </motion.button>
@@ -2452,7 +2452,7 @@ export const InvestigationWorkspace: React.FC<
                 <button
                   id="dashboard-hero-secondary-cta"
                   onClick={handleExportReport}
-                  className="cursor-pointer text-[#E8ECEF] font-semibold px-6 py-3 rounded-full inline-flex items-center gap-2 text-sm transition-all duration-200"
+                  className="cursor-pointer text-white hover:text-white font-semibold px-6 py-3 rounded-full inline-flex items-center gap-2 text-sm transition-all duration-200"
                   style={{
                     background: 'rgba(13, 17, 22, 0.55)',
                     backdropFilter: 'blur(18px) saturate(140%)',
@@ -2461,7 +2461,7 @@ export const InvestigationWorkspace: React.FC<
                   }}
                 >
                   <Download className="w-4 h-4 text-[#5FC9E8]" />
-                  <span>Export Report</span>
+                  <span className="text-white">Export Report</span>
                 </button>
               </motion.div>
             </div>
