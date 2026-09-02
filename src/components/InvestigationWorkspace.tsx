@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -31,7 +31,8 @@ import {
   Lightbulb,
   ChevronDown,
   ChevronUp,
-  Video
+  Video,
+  X
 } from 'lucide-react';
 import {
   ViewMode,
@@ -39,7 +40,8 @@ import {
   EvidenceItem,
   TimelineEvent,
   ActionItem,
-  ThreatAnalysisResult
+  ThreatAnalysisResult,
+  ForensicsAnalysisResult
 } from '../types';
 import { DEMO_INCIDENTS } from '../data/demoIncidents';
 import {
@@ -48,6 +50,7 @@ import {
   analyzeSuspiciousImage,
   analyzeSuspiciousAudio,
   analyzeSuspiciousVideo,
+  analyzeScreenshotForensics,
   addIncidentEvidence
 } from '../services/api';
 import { MAX_VIDEO_SIZE_BYTES, isVideoFile, readFileAsBase64 } from '../utils/fileUtils';
@@ -206,27 +209,48 @@ const getTacticIcon = (tactic: string) => {
 const getIndicatorPlainLanguage = (indicator: string): string => {
   const lower = indicator.toLowerCase();
 
-  if (lower.includes('external domain') || lower.includes('unrecognized')) {
-    return "This link doesn't come from a company you actually use.";
-  }
-
-  if (lower.includes('urgency') || lower.includes('deadline')) {
-    return "The sender is creating fake urgency to rush you into making a mistake.";
-  }
-
+  // 1. Audio / Voice cloning
   if (
-    lower.includes('squatting') ||
-    lower.includes('lookalike') ||
-    lower.includes('homoglyph') ||
-    lower.includes('spoof')
+    lower.includes('voice clone') ||
+    lower.includes('synthetic voice') ||
+    lower.includes('audio spoof') ||
+    lower.includes('acoustic') ||
+    lower.includes('voicemail') ||
+    lower.includes('ai-generated voice') ||
+    lower.includes('tts synthesis') ||
+    lower.includes('vishing')
   ) {
-    return "This website address is a lookalike copycat made to look authentic.";
+    return "The caller's voice may be an AI-generated clone designed to sound like someone you trust.";
   }
 
-  if (lower.includes('prompt fatigue') || lower.includes('push')) {
+  // 2. Video / Synthetic media / Deepfake
+  if (
+    lower.includes('facial movement') ||
+    lower.includes('deepfake') ||
+    lower.includes('manipulation likelihood') ||
+    lower.includes('audio-visual sync') ||
+    lower.includes('morphed') ||
+    lower.includes('synthetic media')
+  ) {
+    return "Facial inconsistencies and audio desynchronization indicate synthetic video manipulation.";
+  }
+
+  // 3. MFA fatigue / push notifications
+  if (lower.includes('prompt fatigue') || lower.includes('push') || lower.includes('mfa')) {
     return "The attacker is spamming login requests hoping you'll accidentally click approve.";
   }
 
+  // 4. Extortion / Sextortion
+  if (lower.includes('sextortion') || lower.includes('extortion')) {
+    return "An extortionist is claiming to have private files to frighten you into sending money.";
+  }
+
+  // 5. Urgent message / SMS / Phishing
+  if (lower.includes('urgency') || lower.includes('deadline') || lower.includes('coercive')) {
+    return "The sender is creating fake urgency to rush you into making a mistake.";
+  }
+
+  // 6. Reverse proxy / 2FA capture
   if (
     lower.includes('reverse proxy') ||
     lower.includes('capturing 2fa') ||
@@ -235,47 +259,44 @@ const getIndicatorPlainLanguage = (indicator: string): string => {
     return "A deceptive login page designed to intercept your password and two-factor code.";
   }
 
-  if (lower.includes('sextortion') || lower.includes('extortion')) {
-    return "An extortionist is claiming to have private files to frighten you into sending money.";
-  }
-
+  // 7. Domain / URL / Lookalike / Typosquatting
   if (
+    lower.includes('domain registered') ||
+    lower.includes('newly registered') ||
+    lower.includes('registered') ||
     lower.includes('typosquatting') ||
     lower.includes('subdomain') ||
     lower.includes('free tier') ||
-    lower.includes('phishing kit')
+    lower.includes('phishing kit') ||
+    lower.includes('squatting') ||
+    lower.includes('lookalike') ||
+    lower.includes('homoglyph')
   ) {
-    return "The domain is imitating a trusted platform using subtle spelling variations.";
+    return "This web address is designed to imitate a trusted platform and trick you into entering credentials.";
   }
 
+  // 8. Credential harvesting / fake login page
   if (
     lower.includes('credential harvesting') ||
-    lower.includes('clone') ||
+    lower.includes('page clone') ||
+    lower.includes('site clone') ||
     lower.includes('harvest')
   ) {
     return "This fake page is programmed to steal your username, password, and security codes.";
   }
 
+  // 9. Spam flood / inbox disruption
   if (lower.includes('high volume') || lower.includes('inbox disruption')) {
     return "Mass spam attack designed to bury important fraud alerts from your bank or email.";
   }
 
+  // 10. Malware / Dropper
   if (lower.includes('malicious payload') || lower.includes('dropper')) {
     return "A harmful attachment or file download that could install tracking malware.";
   }
 
-  if (lower.includes('ai-generated') || lower.includes('voice clone') || lower.includes('voice') || lower.includes('acoustic')) {
-    return "Synthesized audio mimicking someone's voice using AI generator models.";
-  }
-
-  if (
-    lower.includes('facial movement') ||
-    lower.includes('deepfake') ||
-    lower.includes('manipulation likelihood') ||
-    lower.includes('audio-visual sync') ||
-    lower.includes('morphed')
-  ) {
-    return "Facial inconsistencies and audio desynchronization indicate synthetic video manipulation.";
+  if (lower.includes('external domain') || lower.includes('unrecognized')) {
+    return "This link doesn't come from a company you actually use.";
   }
 
   return "Identified as a suspicious pattern commonly used in digital threat campaigns.";
@@ -325,10 +346,105 @@ const getTacticPlainLanguage = (tactic: string): string => {
   }
 
   if (lower.includes('synthetic media') || lower.includes('deepfake')) {
-    return "Synthetic Media / Deepfake Video Fabrication";
+    return "Deepfake video";
   }
 
   return tactic;
+};
+
+// Region-general legal reporting guidance helper
+const formatLegalSteps = (text?: string): string => {
+  if (!text) return '';
+  const userTimezone = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : '';
+  const isUS = userTimezone.includes('America') || userTimezone.includes('US');
+
+  let cleaned = text.replace(
+    /submit report to FTC\.gov\s*\/\s*IC3\.gov/gi,
+    'report to your local cybercrime authority or financial institution'
+  );
+  cleaned = cleaned.replace(
+    /Report message to FBI IC3/gi,
+    'Report message to your local cybercrime authority'
+  );
+
+  if (isUS && !cleaned.includes('(US: FTC.gov / IC3.gov)')) {
+    cleaned += ' (US portals: FTC.gov / IC3.gov)';
+  }
+
+  return cleaned;
+};
+
+export interface KeyFindingItem {
+  tactic: string;
+  label: string;
+  score: number;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  isVisual: boolean;
+  evidenceId?: string;
+}
+
+const getKeyFindingsList = (incident: IncidentCase): KeyFindingItem[] => {
+  const isVisualType = (type: string) => {
+    const t = type.toLowerCase();
+    return t === 'video' || t === 'screenshot' || t === 'image' || t === 'file';
+  };
+
+  const isVisualTactic = (tactic: string, matchingEv?: EvidenceItem) => {
+    if (matchingEv && isVisualType(matchingEv.type)) {
+      return true;
+    }
+    const lower = tactic.toLowerCase();
+    return (
+      lower.includes('video') ||
+      lower.includes('deepfake') ||
+      lower.includes('synthetic media') ||
+      lower.includes('screenshot') ||
+      lower.includes('image') ||
+      lower.includes('mfa prompt') ||
+      lower.includes('fatigue')
+    );
+  };
+
+  return incident.synthesis.tacticsObserved.map((tactic, idx) => {
+    const lower = tactic.toLowerCase();
+    const matchingEv = incident.evidence.find(
+      (ev) =>
+        ev.title.toLowerCase().includes(lower) ||
+        ev.indicators.some((ind) => ind.toLowerCase().includes(lower)) ||
+        ((lower.includes('video') || lower.includes('synthetic media') || lower.includes('deepfake')) && ev.type === 'video') ||
+        ((lower.includes('fatigue') || lower.includes('prompt')) && ev.type === 'screenshot') ||
+        (lower.includes('smish') && ev.type === 'message') ||
+        (lower.includes('proxy') && ev.type === 'url') ||
+        ((lower.includes('voice') || lower.includes('acoustic')) && ev.type === 'audio')
+    ) || incident.evidence[idx];
+
+    const isVideoOrDeepfake = lower.includes('synthetic media') || lower.includes('deepfake');
+    const score = isVideoOrDeepfake
+      ? 68
+      : (matchingEv?.riskScore ?? incident.evidence[idx]?.riskScore ?? incident.riskScore);
+
+    const isVisual = isVisualTactic(tactic, matchingEv);
+    const severity: 'critical' | 'high' | 'medium' | 'low' =
+      score >= 90 ? 'critical' : (score >= 70 || isVideoOrDeepfake) ? 'high' : 'medium';
+
+    let label = getTacticPlainLanguage(tactic);
+    if (lower.includes('synthetic media') || lower.includes('deepfake')) {
+      label = 'Deepfake video';
+    }
+
+    return {
+      tactic,
+      label,
+      score,
+      severity,
+      isVisual,
+      evidenceId: matchingEv?.id || incident.evidence[idx]?.id,
+    };
+  }).sort((a, b) => {
+    if (a.isVisual && !b.isVisual) return -1;
+    if (!a.isVisual && b.isVisual) return 1;
+    return b.score - a.score;
+  });
 };
 
 const getSignalBadgeIcon = (indicator: string) => {
@@ -442,8 +558,63 @@ const getTacticDescription = (tactic: string): string => {
   if (lower.includes('stalkerware') || lower.includes('spyware')) {
     return 'Hidden tracking software installed to monitor your location, messages, and activity.';
   }
-  return 'A known attack pattern used to manipulate, deceive, or gain unauthorised access.';
+  if (lower.includes('synthetic media') || lower.includes('deepfake')) {
+    return 'The video or audio has been digitally altered to make someone appear to say or do something that never actually happened.';
+  }
+  if (lower.includes('emotional manipulation') || lower.includes('pity') || lower.includes('guilt')) {
+    return 'A sob story or guilt trip designed to lower your guard so you comply without questioning the request.';
+  }
+  return `${tactic} is a known attack pattern used to manipulate, deceive, or gain unauthorised access.`;
 };
+
+// Helper to extract uppercase kinetic headline words directly from the active incident
+export function getHeadlineWords(incident: IncidentCase): { line1: string[]; line2: string[] } {
+  if (incident.headline && incident.headline.line1 && incident.headline.line1.length > 0) {
+    return {
+      line1: incident.headline.line1.map((w) => w.toUpperCase()),
+      line2: (incident.headline.line2 || []).map((w) => w.toUpperCase()),
+    };
+  }
+
+  const title = incident.title || '';
+  const words = title.trim().toUpperCase().split(/\s+/).filter(Boolean);
+
+  if (words.length === 0) {
+    return { line1: ['INCIDENT', 'INVESTIGATION'], line2: [] };
+  }
+
+  if (words.length <= 3) {
+    return { line1: words, line2: [] };
+  }
+
+  // Look for a colon (e.g., "LIVE INVESTIGATION: PHISHING")
+  const colonIdx = words.findIndex((w) => w.endsWith(':'));
+  if (colonIdx >= 0 && colonIdx < words.length - 1) {
+    return {
+      line1: words.slice(0, colonIdx + 1),
+      line2: words.slice(colonIdx + 1),
+    };
+  }
+
+  // Look for a natural break at '&'
+  const ampersandIdx = words.indexOf('&');
+  if (ampersandIdx >= 1 && ampersandIdx < words.length - 1) {
+    const ratio = ampersandIdx / words.length;
+    if (ratio >= 0.25 && ratio <= 0.75) {
+      return {
+        line1: words.slice(0, ampersandIdx),
+        line2: words.slice(ampersandIdx),
+      };
+    }
+  }
+
+  // Balanced split
+  const mid = Math.ceil(words.length / 2);
+  return {
+    line1: words.slice(0, mid),
+    line2: words.slice(mid),
+  };
+}
 
 export const InvestigationWorkspace: React.FC<
   InvestigationWorkspaceProps
@@ -454,6 +625,33 @@ export const InvestigationWorkspace: React.FC<
     const [activeCase, setActiveCase] = useState<IncidentCase>(
       selectedDemoCase || DEMO_INCIDENTS[0]
     );
+
+    // Synchronize activeCase if parent passes a different selectedDemoCase
+    useEffect(() => {
+      if (selectedDemoCase) {
+        setActiveCase(selectedDemoCase);
+      }
+    }, [selectedDemoCase]);
+
+    // Single source of truth for kinetic hero headline words
+    const headlineWords = useMemo(() => getHeadlineWords(activeCase), [activeCase]);
+
+    // Single source of truth for evidence types matching activeCase.evidence
+    const evidenceTypesDisplay = useMemo(() => {
+      const typeLabelMap: Record<string, string> = {
+        message: 'Text',
+        text: 'Text',
+        url: 'URL',
+        screenshot: 'Screenshot',
+        audio: 'Audio',
+        video: 'Video',
+        email: 'Email',
+      };
+      const types = Array.from(
+        new Set(activeCase.evidence.map((ev) => typeLabelMap[ev.type] || ev.type.toUpperCase()))
+      );
+      return types.length > 0 ? types.join(' · ') : 'No artifacts';
+    }, [activeCase.evidence]);
 
     const [activeTab, setActiveTab] = useState<
       'evidence' | 'timeline' | 'actions' | 'export'
@@ -468,6 +666,26 @@ export const InvestigationWorkspace: React.FC<
     const [suspiciousMessageInput, setSuspiciousMessageInput] = useState('');
     const [analysisError, setAnalysisError] = useState<string | null>(null);
     const [analysisSuccess, setAnalysisSuccess] = useState<string | null>(null);
+
+    // Stored failed analysis context to allow immediate retry with the same input
+    const [lastFailedAnalysis, setLastFailedAnalysis] = useState<{
+      source: 'direct-text' | 'custom-evidence';
+      text?: string;
+      url?: string;
+      categoryType?: 'message' | 'url' | 'screenshot' | 'email' | 'audio' | 'video';
+      file?: File | null;
+    } | null>(null);
+
+    // Active AbortController to cleanly abort analysis on retry or unmount
+    const analysisAbortControllerRef = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+      return () => {
+        if (analysisAbortControllerRef.current) {
+          analysisAbortControllerRef.current.abort();
+        }
+      };
+    }, []);
 
     const [customTextInput, setCustomTextInput] = useState('');
     const [customUrlInput, setCustomUrlInput] = useState('');
@@ -489,8 +707,37 @@ export const InvestigationWorkspace: React.FC<
     const [showAllTactics, setShowAllTactics] = useState(false);
     const constellationRef = useRef<ConstellationHandle>(null);
 
+    const confidenceScore = (() => {
+      for (const ev of activeCase.evidence) {
+        if (ev.metadata?.['AI Confidence']) {
+          const parsed = parseInt(ev.metadata['AI Confidence'], 10);
+          if (!isNaN(parsed)) return parsed;
+        }
+      }
+      return Math.min(98, Math.round(activeCase.riskScore * 1.08 + 10));
+    })();
+
     const toggleEvidenceDetails = (id: string) => {
       setExpandedEvidenceIds((prev) => ({ ...prev, [id]: !prev[id] }));
+    };
+
+    const keyFindingsList = useMemo(() => getKeyFindingsList(activeCase), [activeCase]);
+
+    const scrollToEvidenceCard = (evidenceId?: string) => {
+      if (!evidenceId) return;
+      setActiveTab('evidence');
+      setShowAllEvidence(true);
+
+      setTimeout(() => {
+        const el = document.getElementById(`evidence-card-${evidenceId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('ring-2', 'ring-[#5FC9E8]', 'ring-offset-2', 'ring-offset-[#06080B]', 'rounded-3xl');
+          setTimeout(() => {
+            el.classList.remove('ring-2', 'ring-[#5FC9E8]', 'ring-offset-2', 'ring-offset-[#06080B]', 'rounded-3xl');
+          }, 2000);
+        }
+      }, 100);
     };
 
     // Toggle Action item completed
@@ -515,7 +762,8 @@ export const InvestigationWorkspace: React.FC<
         | 'screenshot'
         | 'email'
         | 'audio'
-        | 'video' = 'message'
+        | 'video' = 'message',
+      extraElaData?: ForensicsAnalysisResult | null
     ) => {
       const riskLevelCapitalized:
         | 'Low'
@@ -548,8 +796,15 @@ export const InvestigationWorkspace: React.FC<
         metadata: {
           'Threat Type': result.threat_type,
           'AI Confidence': `${result.confidence}%`,
-          Model: 'Gemini 3.6 Flash'
-        }
+          Model: 'Gemini 3.6 Flash',
+          ...(extraElaData
+            ? {
+                'ELA Score': `${extraElaData.manipulation_score}/100`,
+                'ELA Verdict': extraElaData.verdict
+              }
+            : {})
+        },
+        elaResult: extraElaData || undefined
       };
 
       const newTimeline: TimelineEvent = {
@@ -705,134 +960,172 @@ export const InvestigationWorkspace: React.FC<
 
     // Submit text message directly from the workspace input
     const handleAnalyzeTextMessage = async (
-      e: React.FormEvent
+      e?: React.FormEvent,
+      overrideText?: string
     ) => {
-      e.preventDefault();
+      e?.preventDefault();
 
-      if (!suspiciousMessageInput.trim()) return;
+      if (isAnalyzing) return;
+
+      const textToAnalyze = (overrideText !== undefined ? overrideText : suspiciousMessageInput).trim();
+      if (!textToAnalyze) return;
+
+      // Abort previous in-flight request if any
+      if (analysisAbortControllerRef.current) {
+        analysisAbortControllerRef.current.abort();
+      }
+      const controller = new AbortController();
+      analysisAbortControllerRef.current = controller;
 
       setIsAnalyzing(true);
       setAnalysisError(null);
 
       try {
         const result = await analyzeSuspiciousText(
-          suspiciousMessageInput.trim()
+          textToAnalyze,
+          controller.signal
         );
 
         processAnalysisResult(
           result,
-          suspiciousMessageInput.trim(),
+          textToAnalyze,
           'message'
         );
 
         setSuspiciousMessageInput('');
+        setLastFailedAnalysis(null);
       } catch (err: any) {
-        console.error(
-          'Failed to analyze message:',
-          err
-        );
+        if (err.name === 'AbortError' || controller.signal.aborted) {
+          return;
+        }
 
-        setAnalysisError(
+        console.error('Failed to analyze message:', err);
+
+        const errorMsg =
           err?.message ||
-          'Failed to analyze the message with AI.'
-        );
+          'Failed to analyze the message with AI. Please try again.';
+
+        setAnalysisError(errorMsg);
+        setLastFailedAnalysis({
+          source: 'direct-text',
+          text: textToAnalyze
+        });
       } finally {
-        setIsAnalyzing(false);
+        if (analysisAbortControllerRef.current === controller) {
+          analysisAbortControllerRef.current = null;
+          setIsAnalyzing(false);
+        }
       }
     };
 
     // Submit custom evidence modal with real AI analysis
     const handleAddCustomEvidence = async (
-      e: React.FormEvent
+      e?: React.FormEvent,
+      retryParams?: {
+        text?: string;
+        url?: string;
+        categoryType?: 'message' | 'url' | 'screenshot' | 'email' | 'audio' | 'video';
+        file?: File | null;
+      }
     ) => {
-      e.preventDefault();
+      e?.preventDefault();
+
+      if (isAnalyzing) return;
+
+      const typeInput = retryParams?.categoryType || customTypeInput;
+      const textInput = retryParams?.text !== undefined ? retryParams.text : customTextInput;
+      const urlInput = retryParams?.url !== undefined ? retryParams.url : customUrlInput;
+      const fileInput = retryParams?.file !== undefined ? retryParams.file : selectedEvidenceFile;
+
+      const hasContent = textInput.trim() || urlInput.trim() || fileInput;
+      if (!hasContent) {
+        setAnalysisError('Please provide text, a URL, or upload a file to analyze.');
+        return;
+      }
+
+      // Abort previous in-flight request if any
+      if (analysisAbortControllerRef.current) {
+        analysisAbortControllerRef.current.abort();
+      }
+      const controller = new AbortController();
+      analysisAbortControllerRef.current = controller;
 
       setIsAnalyzing(true);
       setShowAddEvidenceModal(false);
       setAnalysisError(null);
 
+      const currentAttemptContext = {
+        source: 'custom-evidence' as const,
+        text: textInput,
+        url: urlInput,
+        categoryType: typeInput,
+        file: fileInput
+      };
+
       try {
         let result: ThreatAnalysisResult;
-
+        let extraElaData: ForensicsAnalysisResult | null = null;
         let displayContent =
-          customTextInput ||
-          customUrlInput ||
-          (selectedEvidenceFile
-            ? selectedEvidenceFile.name
-            : 'Ingested Evidence');
+          textInput.trim() ||
+          urlInput.trim() ||
+          (fileInput ? fileInput.name : 'Ingested Evidence');
 
-        if (
-          customTypeInput === 'url' ||
-          customUrlInput.trim()
-        ) {
-          const urlToAnalyze =
-            customUrlInput.trim() ||
-            customTextInput.trim();
-
-          result = await analyzeSuspiciousUrl(
-            urlToAnalyze
-          );
-
+        if (typeInput === 'url' || urlInput.trim()) {
+          const urlToAnalyze = urlInput.trim() || textInput.trim();
+          result = await analyzeSuspiciousUrl(urlToAnalyze, controller.signal);
           displayContent = urlToAnalyze;
         } else if (
-          customTypeInput === 'screenshot' ||
-          (selectedEvidenceFile &&
-            selectedEvidenceFile.type.startsWith('image/'))
+          typeInput === 'screenshot' ||
+          (fileInput && fileInput.type.startsWith('image/'))
         ) {
-          if (selectedEvidenceFile) {
-            const b64 = await new Promise<string>(
-              (resolve, reject) => {
-                const reader = new FileReader();
+          if (fileInput) {
+            const b64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(fileInput);
+            });
 
-                reader.onload = () =>
-                  resolve(reader.result as string);
+            // Execute analyzeSuspiciousImage (Gemini) and analyzeScreenshotForensics (ELA) in parallel
+            const [geminiResult, elaResult] = await Promise.all([
+              analyzeSuspiciousImage(b64, fileInput.type, controller.signal),
+              analyzeScreenshotForensics(fileInput, controller.signal).catch((elaErr) => {
+                console.warn('ELA analysis skipped or failed:', elaErr);
+                return null;
+              })
+            ]);
 
-                reader.onerror = reject;
-
-                reader.readAsDataURL(
-                  selectedEvidenceFile
-                );
-              }
-            );
-
-            result = await analyzeSuspiciousImage(
-              b64,
-              selectedEvidenceFile.type
-            );
-
-            displayContent = `${selectedEvidenceFile.name} (Screenshot Evidence)`;
+            result = geminiResult;
+            if (elaResult && elaResult.manipulation_score > 35) {
+              extraElaData = elaResult;
+            }
+            displayContent = `${fileInput.name} (Screenshot Evidence)`;
           } else {
             result = await analyzeSuspiciousText(
-              customTextInput.trim() ||
-              'Screenshot Analysis Request'
+              textInput.trim() || 'Screenshot Analysis Request',
+              controller.signal
             );
           }
         } else if (
-          customTypeInput === 'audio' ||
-          (selectedEvidenceFile &&
-            selectedEvidenceFile.type.startsWith('audio/'))
+          typeInput === 'audio' ||
+          (fileInput && fileInput.type.startsWith('audio/'))
         ) {
-          if (selectedEvidenceFile) {
-            const b64 = await readFileAsBase64(selectedEvidenceFile);
-
-            result = await analyzeSuspiciousAudio(
-              b64,
-              selectedEvidenceFile.type
-            );
-
-            displayContent = `${selectedEvidenceFile.name} (Audio Recording Evidence)`;
+          if (fileInput) {
+            const b64 = await readFileAsBase64(fileInput);
+            result = await analyzeSuspiciousAudio(b64, fileInput.type, controller.signal);
+            displayContent = `${fileInput.name} (Audio Recording Evidence)`;
           } else {
             result = await analyzeSuspiciousText(
-              customTextInput.trim() ||
-              'Audio Evidence Analysis Request'
+              textInput.trim() || 'Audio Evidence Analysis Request',
+              controller.signal
             );
           }
         } else if (
-          customTypeInput === 'video' ||
-          (selectedEvidenceFile && isVideoFile(selectedEvidenceFile))
+          typeInput === 'video' ||
+          (fileInput && isVideoFile(fileInput))
         ) {
-          if (selectedEvidenceFile) {
-            if (selectedEvidenceFile.size > MAX_VIDEO_SIZE_BYTES) {
+          if (fileInput) {
+            if (fileInput.size > MAX_VIDEO_SIZE_BYTES) {
               setAnalysisError(
                 'Video file exceeds 20MB limit. Please upload a clip under 20MB for inline forensic analysis.'
               );
@@ -840,52 +1133,69 @@ export const InvestigationWorkspace: React.FC<
               return;
             }
 
-            const b64 = await readFileAsBase64(selectedEvidenceFile);
+            const b64 = await readFileAsBase64(fileInput);
             result = await analyzeSuspiciousVideo(
               b64,
-              selectedEvidenceFile.type || 'video/mp4'
+              fileInput.type || 'video/mp4',
+              controller.signal
             );
-
-            displayContent = `${selectedEvidenceFile.name} (Video Forensics Evidence)`;
+            displayContent = `${fileInput.name} (Video Forensics Evidence)`;
           } else {
             result = await analyzeSuspiciousText(
-              customTextInput.trim() ||
-              'Video Forensics Evidence Analysis Request'
+              textInput.trim() || 'Video Forensics Evidence Analysis Request',
+              controller.signal
             );
           }
         } else {
-          const textToAnalyze =
-            customTextInput.trim() ||
-            customUrlInput.trim();
-
-          result = await analyzeSuspiciousText(
-            textToAnalyze
-          );
-
+          const textToAnalyze = textInput.trim() || urlInput.trim();
+          result = await analyzeSuspiciousText(textToAnalyze, controller.signal);
           displayContent = textToAnalyze;
         }
 
         processAnalysisResult(
           result,
           displayContent,
-          customTypeInput as any
+          typeInput as any,
+          extraElaData
         );
 
         setCustomTextInput('');
         setCustomUrlInput('');
         setSelectedEvidenceFile(null);
+        setLastFailedAnalysis(null);
       } catch (err: any) {
-        console.error(
-          'Error analyzing evidence:',
-          err
-        );
+        if (err.name === 'AbortError' || controller.signal.aborted) {
+          return;
+        }
 
-        setAnalysisError(
-          err?.message ||
-          'Failed to analyze evidence with AI.'
-        );
+        console.error('Error analyzing evidence:', err);
+
+        const errorMsg =
+          err?.message || 'Failed to analyze evidence with AI. Please try again.';
+
+        setAnalysisError(errorMsg);
+        setLastFailedAnalysis(currentAttemptContext);
       } finally {
-        setIsAnalyzing(false);
+        if (analysisAbortControllerRef.current === controller) {
+          analysisAbortControllerRef.current = null;
+          setIsAnalyzing(false);
+        }
+      }
+    };
+
+    // Retry the most recent failed or timed out evidence analysis
+    const handleRetryAnalysis = () => {
+      if (isAnalyzing || !lastFailedAnalysis) return;
+
+      if (lastFailedAnalysis.source === 'direct-text') {
+        handleAnalyzeTextMessage(undefined, lastFailedAnalysis.text);
+      } else if (lastFailedAnalysis.source === 'custom-evidence') {
+        handleAddCustomEvidence(undefined, {
+          text: lastFailedAnalysis.text,
+          url: lastFailedAnalysis.url,
+          categoryType: lastFailedAnalysis.categoryType,
+          file: lastFailedAnalysis.file
+        });
       }
     };
 
@@ -934,6 +1244,947 @@ export const InvestigationWorkspace: React.FC<
       setTimeout(
         () => setExportSuccessMessage(null),
         4000
+      );
+    };
+
+    // =========================================================
+    // RENDER HELPERS FOR WORKSPACE VIEWS
+    // =========================================================
+
+    const renderTabNav = () => (
+      <div className="flex w-full min-w-0 items-center gap-2 overflow-x-auto border-b border-white/[0.06] pb-2 scrollbar-thin">
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => setActiveTab('evidence')}
+          className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-colors sm:text-sm ${
+            activeTab === 'evidence'
+              ? 'border border-[#5FC9E8]/30 bg-[#0D1116] text-[#E8ECEF] shadow-xs'
+              : 'text-[#7A8794] hover:bg-white/[0.03] hover:text-[#E8ECEF]'
+          }`}
+        >
+          <Layers className="h-4 w-4 text-[#5FC9E8]" />
+          <span>Evidence Artifacts ({activeCase.evidence.length})</span>
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => setActiveTab('timeline')}
+          className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-colors sm:text-sm ${
+            activeTab === 'timeline'
+              ? 'border border-[#5FC9E8]/30 bg-[#0D1116] text-[#E8ECEF] shadow-xs'
+              : 'text-[#7A8794] hover:bg-white/[0.03] hover:text-[#E8ECEF]'
+          }`}
+        >
+          <Clock className="h-4 w-4 text-[#5FC9E8]" />
+          <span>Timeline ({activeCase.timeline.length})</span>
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => setActiveTab('actions')}
+          className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-colors sm:text-sm ${
+            activeTab === 'actions'
+              ? 'border border-[#5FC9E8]/30 bg-[#0D1116] text-[#E8ECEF] shadow-xs'
+              : 'text-[#7A8794] hover:bg-white/[0.03] hover:text-[#E8ECEF]'
+          }`}
+        >
+          <CheckCircle2 className="h-4 w-4 text-[#5FC9E8]" />
+          <span>
+            Action Checklist ({activeCase.actionPlan.filter((a) => a.isCompleted).length}/
+            {activeCase.actionPlan.length})
+          </span>
+        </motion.button>
+      </div>
+    );
+
+    const renderAnalyzer = () => (
+      <div className="w-full min-w-0 space-y-4 rounded-3xl border border-white/[0.08] bg-[#0D1116]/80 p-4 shadow-lg shadow-black/40 sm:p-5">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[#5FC9E8]/20 bg-[#5FC9E8]/10 text-[#5FC9E8]">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <h3
+                className="truncate text-sm font-semibold text-[#E8ECEF]"
+                style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+              >
+                AI Suspicious Message Analyzer
+              </h3>
+              <p className="truncate text-xs text-[#7A8794]">
+                Paste any text, email, link, or message snippet
+              </p>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.03, boxShadow: '0 0 16px rgba(95,201,232,0.35)' }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowAddEvidenceModal(true)}
+              className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-[#5FC9E8] hover:bg-[#7be2fe] px-3.5 py-2 text-xs font-semibold text-[#0A0D10] shadow-xs transition-colors"
+              style={{
+                boxShadow: '0 4px 16px -4px rgba(95, 201, 232, 0.35)',
+              }}
+            >
+              <PlusCircle className="h-3.5 w-3.5 text-[#0A0D10]" />
+              <span>Add Evidence</span>
+            </motion.button>
+
+            <motion.button
+              type="button"
+              id="btn-analyze-suspicious-message-top"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={handleAnalyzeTextMessage}
+              disabled={isAnalyzing || !suspiciousMessageInput.trim()}
+              className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-[#5FC9E8]/40 bg-[#0D1116] px-4 py-2 text-xs font-semibold text-[#5FC9E8] transition-all hover:bg-[#5FC9E8]/10 hover:border-[#5FC9E8] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isAnalyzing ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-[#5FC9E8]" />
+                  <span>Analyzing...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5 text-[#5FC9E8]" />
+                  <span>Analyse</span>
+                </>
+              )}
+            </motion.button>
+          </div>
+        </div>
+
+        {/* ANALYZER FORM */}
+        <form onSubmit={handleAnalyzeTextMessage} className="min-w-0 space-y-3">
+          <textarea
+            id="ai-analyzer-textarea"
+            rows={3}
+            value={suspiciousMessageInput}
+            onChange={(e) => setSuspiciousMessageInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                handleAnalyzeTextMessage();
+              }
+            }}
+            placeholder="e.g. 'URGENT: Your payroll direct deposit failed. Verify your employee account immediately at https://payroll-update-secure.com/auth' or paste email headers..."
+            className="w-full min-w-0 resize-y rounded-2xl border border-white/[0.08] bg-[#06080B]/90 p-3.5 text-xs text-[#E8ECEF] placeholder-[#4A5560] focus:border-[#5FC9E8]/60 focus:outline-none focus:ring-1 focus:ring-[#5FC9E8]/40 font-mono transition-colors leading-relaxed"
+          />
+
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-mono text-[#4A5560] shrink-0">Quick samples:</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setSuspiciousMessageInput(
+                    'HR Notice: Open enrollment closes in 2 hours. Review your benefit deductions: https://benefits-hr-portal.com/login?token=89274'
+                  )
+                }
+                className="shrink-0 rounded-lg border border-white/[0.06] bg-[#06080B] px-2 py-1 text-[11px] font-mono text-[#7A8794] hover:text-[#5FC9E8] hover:border-[#5FC9E8]/30 transition-colors cursor-pointer"
+              >
+                Benefits HR Scam
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setSuspiciousMessageInput(
+                    'Bank Alert: New device logged into your savings account from St. Petersburg, FL. Not you? Tap: https://secure-bank-fraud-alert.net/auth'
+                  )
+                }
+                className="shrink-0 rounded-lg border border-white/[0.06] bg-[#06080B] px-2 py-1 text-[11px] font-mono text-[#7A8794] hover:text-[#5FC9E8] hover:border-[#5FC9E8]/30 transition-colors cursor-pointer"
+              >
+                Bank Device Alert
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setSuspiciousMessageInput(
+                    'Mom please text this new number urgently, I lost my phone and wallet at the station: +1-917-555-0199'
+                  )
+                }
+                className="shrink-0 rounded-lg border border-white/[0.06] bg-[#06080B] px-2 py-1 text-[11px] font-mono text-[#7A8794] hover:text-[#5FC9E8] hover:border-[#5FC9E8]/30 transition-colors cursor-pointer"
+              >
+                Family Distress
+              </button>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              {suspiciousMessageInput.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setSuspiciousMessageInput('')}
+                  className="px-3 py-1.5 text-xs text-[#7A8794] hover:text-[#E8ECEF] transition-colors cursor-pointer font-mono"
+                >
+                  Clear
+                </button>
+              )}
+
+              {/* SINGLE SOLID PRIMARY BUTTON ON SCREEN */}
+              <motion.button
+                type="submit"
+                id="btn-analyze-suspicious-message"
+                whileHover={{
+                  scale: 1.03,
+                  boxShadow: '0 8px 24px -6px rgba(95,201,232,0.5)'
+                }}
+                whileTap={{ scale: 0.97 }}
+                disabled={isAnalyzing || !suspiciousMessageInput.trim()}
+                className="flex shrink-0 cursor-pointer items-center gap-2 rounded-full bg-[#5FC9E8] px-6 py-2.5 text-xs font-semibold text-[#0A0D10] shadow-[0_8px_24px_-6px_rgba(95,201,232,0.4)] transition-all hover:bg-[#7be2fe] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Analyzing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>Analyse</span>
+                  </>
+                )}
+              </motion.button>
+            </div>
+          </div>
+        </form>
+
+        {isAnalyzing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="min-w-0 space-y-4 pt-2"
+          >
+            <EvidenceCardSkeleton />
+            <EvidenceCardSkeleton />
+          </motion.div>
+        )}
+
+        {!isAnalyzing && analysisError && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="min-w-0 rounded-2xl border border-[#D9705A]/30 bg-[#0D1116] p-4 text-[#E8ECEF] shadow-lg shadow-black/40 space-y-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[#D9705A]/30 bg-[#D9705A]/10 text-[#D9705A]">
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-semibold text-[#D9705A]">
+                    {analysisError.toLowerCase().includes('timed out') ? 'Analysis Timed Out' : 'Analysis Failed'}
+                  </h4>
+                  <p className="mt-0.5 text-xs text-[#7A8794] leading-relaxed">
+                    {analysisError}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAnalysisError(null)}
+                className="shrink-0 p-1 text-[#7A8794] hover:text-[#E8ECEF] transition-colors cursor-pointer"
+                title="Dismiss"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {lastFailedAnalysis && (
+              <div className="flex items-center justify-end gap-2 pt-1 border-t border-white/[0.06]">
+                <motion.button
+                  type="button"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleRetryAnalysis}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[#5FC9E8]/40 bg-[#5FC9E8]/10 px-4 py-1.5 text-xs font-semibold text-[#5FC9E8] transition-all hover:bg-[#5FC9E8]/20"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  <span>Retry Analysis</span>
+                </motion.button>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </div>
+    );
+
+    const renderEvidenceSection = (isSimple: boolean) => {
+      const isVisualEvidence = (type: string) => {
+        const t = type.toLowerCase();
+        return t === 'video' || t === 'screenshot' || t === 'image' || t === 'file';
+      };
+
+      const sortedEvidence = [...activeCase.evidence].sort((a, b) => {
+        const aVisual = isVisualEvidence(a.type);
+        const bVisual = isVisualEvidence(b.type);
+        if (aVisual && !bVisual) return -1;
+        if (!aVisual && bVisual) return 1;
+        return b.riskScore - a.riskScore;
+      });
+
+      const initialCount = isSimple ? 1 : 2;
+      const initialEvidence = sortedEvidence.slice(0, initialCount);
+      const extraEvidence = sortedEvidence.slice(initialCount);
+      const hiddenCount = extraEvidence.length;
+
+      return (
+        <div className="space-y-4">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 pt-2">
+            <h3
+              className="text-base font-semibold text-[#E8ECEF]"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+            >
+              Ingested Digital Evidence
+            </h3>
+
+            <motion.button
+              whileHover={{ scale: 1.03, boxShadow: '0 0 16px rgba(95,201,232,0.35)' }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowAddEvidenceModal(true)}
+              className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[#5FC9E8] hover:bg-[#7be2fe] px-3.5 py-1.5 text-xs font-semibold text-[#0A0D10] shadow-xs transition-colors"
+              style={{
+                boxShadow: '0 4px 16px -4px rgba(95, 201, 232, 0.35)',
+              }}
+            >
+              <PlusCircle className="h-3.5 w-3.5 text-[#0A0D10]" />
+              <span>Add Evidence</span>
+            </motion.button>
+          </div>
+
+          <div className="space-y-4">
+            <AnimatePresence initial={false}>
+              {initialEvidence.map((ev, idx) => (
+                <div key={ev.id} id={`evidence-card-${ev.id}`} className="scroll-mt-24 transition-all duration-300">
+                  <EvidenceCard
+                    ev={ev}
+                    idx={idx}
+                    isExpanded={!!expandedEvidenceIds[ev.id]}
+                    onToggleExpand={() => toggleEvidenceDetails(ev.id)}
+                    isSimpleView={isSimple}
+                  />
+                </div>
+              ))}
+
+              {showAllEvidence && extraEvidence.length > 0 && (
+                <motion.div
+                  key="extra-evidence"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  className="space-y-4 overflow-hidden"
+                >
+                  {extraEvidence.map((ev, idx) => (
+                    <div key={ev.id} id={`evidence-card-${ev.id}`} className="scroll-mt-24 transition-all duration-300">
+                      <EvidenceCard
+                        ev={ev}
+                        idx={idx + initialCount}
+                        isExpanded={!!expandedEvidenceIds[ev.id]}
+                        onToggleExpand={() => toggleEvidenceDetails(ev.id)}
+                        isSimpleView={isSimple}
+                      />
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {hiddenCount > 0 && (
+              <div className="flex justify-center pt-1">
+                <button
+                  type="button"
+                  id="btn-toggle-show-all-evidence"
+                  onClick={() => setShowAllEvidence((prev) => !prev)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#5FC9E8] hover:text-[#7be2fe] transition-colors cursor-pointer py-1.5 px-3 rounded-xl hover:bg-white/[0.04]"
+                >
+                  <span>
+                    {showAllEvidence ? 'Show less' : `Show ${hiddenCount} more`}
+                  </span>
+                  {showAllEvidence ? (
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const renderTimelineSection = () => (
+      <div className="min-w-0 space-y-4">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <h3 className="text-base font-semibold text-[#E8ECEF]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+            Incident Chronology & Reconstruction
+          </h3>
+          <span className="shrink-0 text-xs font-mono text-[#7A8794]">
+            Automated Correlation
+          </span>
+        </div>
+
+        <div
+          className="w-full min-w-0 space-y-6 rounded-[20px] p-4 sm:p-6 shadow-lg"
+          style={{
+            background: 'rgba(13, 17, 22, 0.55)',
+            backdropFilter: 'blur(18px) saturate(140%)',
+            WebkitBackdropFilter: 'blur(18px) saturate(140%)',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+          }}
+        >
+          {activeCase.timeline.map((event, idx) => {
+            const isHighSeverity = event.severity === 'high' || event.severity === 'critical';
+            const isMedSeverity = event.severity === 'medium';
+            const dotColor = isHighSeverity ? '#D9705A' : isMedSeverity ? '#E0A458' : '#5FC9E8';
+
+            return (
+              <motion.div
+                key={event.id}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.06 }}
+                className="relative min-w-0 border-l-2 pb-6 pl-6 last:border-l-0 last:pb-0"
+                style={{ borderColor: 'rgba(95, 201, 232, 0.2)' }}
+              >
+                <div
+                  className="absolute -left-[9px] top-0 h-4 w-4 rounded-full border-2 border-[#06080B]"
+                  style={{
+                    backgroundColor: dotColor,
+                    boxShadow: isHighSeverity ? '0 0 14px rgba(217, 112, 90, 0.65)' : 'none',
+                  }}
+                />
+                <div className="flex min-w-0 flex-wrap items-center gap-2 pb-1">
+                  <span
+                    className="shrink-0 rounded-md px-2 py-0.5 text-xs font-bold font-mono"
+                    style={{
+                      backgroundColor: `${dotColor}18`,
+                      color: dotColor,
+                      border: `1px solid ${dotColor}33`,
+                    }}
+                  >
+                    {event.timestamp}
+                  </span>
+                  <span className="shrink-0 rounded-md border border-white/[0.06] bg-[#06080B]/80 px-2 py-0.5 text-xs font-mono text-[#7A8794]">
+                    Phase: {event.phase}
+                  </span>
+                </div>
+                <h4 className="mt-1 break-words text-sm font-semibold text-[#E8ECEF]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                  {event.title}
+                </h4>
+                <p className="mt-1 break-words text-xs leading-relaxed text-[#7A8794]">
+                  {event.description}
+                </p>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    );
+
+    const renderActionsSection = () => (
+      <div className="min-w-0 space-y-4">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <h3 className="text-base font-semibold text-[#E8ECEF]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+            Situation-Specific Recovery Actions
+          </h3>
+          <span className="shrink-0 text-xs font-mono text-[#7A8794]">
+            Progress: {activeCase.actionPlan.filter((a) => a.isCompleted).length} / {activeCase.actionPlan.length} completed
+          </span>
+        </div>
+
+        <div className="min-w-0 space-y-3">
+          {activeCase.actionPlan.map((act, idx) => (
+            <motion.div
+              key={act.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.05 }}
+              whileHover={{ x: 3 }}
+              onClick={() => handleToggleAction(act.id)}
+              className={`flex min-w-0 cursor-pointer items-start gap-3.5 rounded-3xl border p-4 transition-all ${
+                act.isCompleted
+                  ? 'border-[#5FC9E8]/30 bg-[#5FC9E8]/5'
+                  : 'border-white/[0.06] bg-[#0D1116]/70 shadow-xs hover:border-white/[0.12]'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={act.isCompleted}
+                onChange={() => { }}
+                className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-md accent-[#5FC9E8]"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span
+                    className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold font-mono uppercase tracking-wider ${
+                      act.priority === 'urgent'
+                        ? 'border border-[#D9705A]/20 bg-[#D9705A]/10 text-[#D9705A]'
+                        : act.priority === 'high'
+                          ? 'border border-[#E0A458]/20 bg-[#E0A458]/10 text-[#E0A458]'
+                          : 'border border-white/[0.08] bg-[#06080B] text-[#7A8794]'
+                    }`}
+                  >
+                    {act.priority}
+                  </span>
+                  <span className="break-words text-xs font-mono text-[#7A8794]">
+                    {act.category}
+                  </span>
+                </div>
+                <h4
+                  className={`mt-1 break-words text-sm font-semibold ${
+                    act.isCompleted ? 'text-[#7A8794] line-through' : 'text-[#E8ECEF]'
+                  }`}
+                >
+                  {act.title}
+                </h4>
+                <p className="mt-1 break-words text-xs leading-relaxed text-[#7A8794]">
+                  {act.description}
+                </p>
+                {act.actionLinks && act.actionLinks.length > 0 ? (
+                  <div className="mt-2.5 flex flex-col gap-1.5">
+                    {act.actionLinks.map((link, lIdx) => (
+                      <a
+                        key={lIdx}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex max-w-full items-center gap-1.5 break-words text-xs font-semibold text-[#5FC9E8] hover:text-[#8ee1f9] transition-colors"
+                      >
+                        <span>{link.label}</span>
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                      </a>
+                    ))}
+                  </div>
+                ) : act.actionTarget ? (
+                  <a
+                    href={act.actionTarget}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-2 inline-flex max-w-full items-center gap-1 break-words text-xs font-semibold text-[#5FC9E8] hover:text-[#8ee1f9]"
+                  >
+                    <span>Open Takedown Tool</span>
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>
+                ) : null}
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    );
+
+    const renderTechnicalDetailsSection = (isSimple: boolean) => (
+      <div
+        className={
+          isSimple
+            ? 'w-full min-w-0 rounded-2xl overflow-hidden shadow-lg border border-white/[0.08] bg-[#0D1116]/80'
+            : ''
+        }
+      >
+        <button
+          type="button"
+          id="btn-toggle-technical-details"
+          onClick={() => setTechnicalOpen((prev) => !prev)}
+          className="flex w-full cursor-pointer items-center justify-between gap-3 px-5 py-4 text-xs font-semibold text-[#7A8794] hover:text-[#E8ECEF] transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <Lock className="h-3.5 w-3.5 text-[#5FC9E8]" />
+            <span>View technical details, chain of custody</span>
+          </span>
+          {technicalOpen ? (
+            <ChevronUp className="h-3.5 w-3.5 text-[#5FC9E8]" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5 text-[#5FC9E8]" />
+          )}
+        </button>
+
+        <AnimatePresence>
+          {technicalOpen && (
+            <motion.div
+              key="tech-details"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              className="overflow-hidden"
+              onAnimationComplete={(definition) => {
+                if (definition === 'animate') {
+                  constellationRef.current?.remeasure();
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                      setTimeout(() => {
+                        constellationRef.current?.remeasure();
+                      }, 80);
+                    });
+                  });
+                }
+              }}
+            >
+              <div
+                className="px-5 pb-5 space-y-5"
+                style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+              >
+                {/* FORENSIC ASSESSMENT DETAIL */}
+                <div className="pt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-[#4A5560]">
+                      Forensic Assessment
+                    </span>
+                    <span
+                      className="shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold font-mono"
+                      style={{
+                        backgroundColor:
+                          activeCase.riskScore >= 75
+                            ? 'rgba(217, 112, 90, 0.15)'
+                            : activeCase.riskScore >= 50
+                            ? 'rgba(224, 164, 88, 0.15)'
+                            : 'rgba(95, 201, 232, 0.15)',
+                        color:
+                          activeCase.riskScore >= 75
+                            ? '#D9705A'
+                            : activeCase.riskScore >= 50
+                            ? '#E0A458'
+                            : '#5FC9E8',
+                        border: `1px solid ${
+                          activeCase.riskScore >= 75
+                            ? 'rgba(217, 112, 90, 0.3)'
+                            : activeCase.riskScore >= 50
+                            ? 'rgba(224, 164, 88, 0.3)'
+                            : 'rgba(95, 201, 232, 0.3)'
+                        }`,
+                      }}
+                    >
+                      {activeCase.overallRisk} RISK
+                    </span>
+                  </div>
+
+                  {/* Gauge */}
+                  <div className="flex flex-col items-center justify-center py-2">
+                    <ThreatIndexGauge
+                      score={activeCase.riskScore}
+                      size={140}
+                      radius={54}
+                      strokeWidth={8}
+                    />
+                  </div>
+
+                  {/* Full tactics list */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-[#4A5560] mb-2">
+                      <span>Tactics Identified</span>
+                      <span className="text-[#5FC9E8]">SIGNAL ANALYSIS</span>
+                    </div>
+                    {activeCase.synthesis.tacticsObserved.map((tactic, idx) => {
+                      const isHigh = activeCase.riskScore >= 75;
+                      const barColor = isHigh ? '#D9705A' : '#E0A458';
+                      const TacticIcon = getTacticIcon(tactic);
+                      return (
+                        <div key={idx} className="flex items-center gap-3 py-1 min-w-0">
+                          <div
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md"
+                            style={{ backgroundColor: `${barColor}18`, color: barColor }}
+                          >
+                            <TacticIcon className="h-3 w-3" />
+                          </div>
+                          <div className="h-1.5 w-7 shrink-0 overflow-hidden rounded-full bg-white/[0.08]">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: isHigh ? '100%' : '70%',
+                                backgroundColor: barColor,
+                                boxShadow: `0 0 6px ${barColor}88`,
+                              }}
+                            />
+                          </div>
+                          <span className="font-mono text-[11px] text-[#E8ECEF] leading-snug break-words flex-1 min-w-0">
+                            {getTacticPlainLanguage(tactic)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* IMPACT & ORIGIN READOUT */}
+                <div
+                  className="space-y-3 pt-4"
+                  style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+                >
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-[#4A5560]">
+                    Impact &amp; Origin Readout
+                  </div>
+                  <div className="space-y-3 min-w-0">
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#D9705A]/15 text-[#D9705A] mt-0.5">
+                        <ShieldAlert className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#7A8794]">
+                          Potential Impact
+                        </div>
+                        <p className="mt-0.5 break-words font-sans text-xs leading-relaxed text-[#E8ECEF]">
+                          {activeCase.synthesis.potentialImpact}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#5FC9E8]/15 text-[#5FC9E8] mt-0.5">
+                        <Globe className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#7A8794]">
+                          Infrastructure Origin
+                        </div>
+                        <p className="mt-0.5 break-words font-mono text-xs leading-relaxed text-[#5FC9E8]">
+                          {activeCase.synthesis.originAssessment}
+                        </p>
+                      </div>
+                    </div>
+                    {activeCase.synthesis.recommendedLegalSteps && (
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.06] text-[#7A8794] mt-0.5">
+                          <FileText className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#7A8794]">
+                            Legal Steps
+                          </div>
+                          <p className="mt-0.5 break-words font-sans text-xs leading-relaxed text-[#7A8794]">
+                            {formatLegalSteps(activeCase.synthesis.recommendedLegalSteps)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* EVIDENCE CONSTELLATION */}
+                <div
+                  className="space-y-3 pt-4"
+                  style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Lock className="h-3.5 w-3.5 shrink-0 text-[#5FC9E8]" />
+                    <span
+                      className="text-xs font-semibold text-[#E8ECEF]"
+                      style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+                    >
+                      Evidence Chain of Custody
+                    </span>
+                  </div>
+                  <p className="text-xs leading-relaxed text-[#7A8794]">
+                    All evidence items, header hashes, and chronology records are preserved with
+                    ISO timestamping for regulatory or police reporting.
+                  </p>
+
+                  <EvidenceConstellation
+                    ref={constellationRef}
+                    key={`constellation-${technicalOpen}-${activeCase.id}-${isSimple ? 'simple' : 'tech'}`}
+                    evidence={activeCase.evidence}
+                    caseTitle={activeCase.title}
+                  />
+
+                  {/* SHA-256 */}
+                  <motion.div
+                    initial={{ boxShadow: '0 0 0px rgba(95, 201, 232, 0)' }}
+                    animate={{
+                      boxShadow: [
+                        '0 0 0px rgba(95, 201, 232, 0)',
+                        '0 0 22px rgba(95, 201, 232, 0.6)',
+                        '0 0 0px rgba(95, 201, 232, 0)',
+                      ],
+                    }}
+                    transition={{ duration: 0.7, delay: 0.35, ease: 'easeOut' }}
+                    className="w-full min-w-0 rounded-xl border border-white/[0.08] bg-[#06080B]/90 p-3 flex items-center justify-between gap-2.5 text-[11px] font-mono text-[#7A8794] shadow-xs"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 truncate">
+                      <span className="text-[#5FC9E8] font-bold shrink-0">SHA256:</span>
+                      <span className="truncate text-[#E8ECEF]">
+                        7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(
+                          '7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069'
+                        );
+                        setHasCopiedHash(true);
+                        setTimeout(() => setHasCopiedHash(false), 2000);
+                      }}
+                      title="Copy SHA-256 Hash"
+                      className="shrink-0 p-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-[#5FC9E8] transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-mono"
+                    >
+                      {hasCopiedHash ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-[#5FC9E8]" />
+                          <span>Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-[#5FC9E8]" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </motion.div>
+
+                  {/* Outlined Download Preservation Packet button */}
+                  <button
+                    onClick={handleExportReport}
+                    className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-[#5FC9E8]/40 bg-[#0D1116] hover:bg-[#5FC9E8]/10 hover:border-[#5FC9E8] py-3 text-xs font-semibold text-[#5FC9E8] transition-all duration-200"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>Download Preservation Packet</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+
+    const renderForensicSummaryPanel = () => {
+      const isCritical = activeCase.riskScore >= 90;
+      const isHigh = activeCase.riskScore >= 70;
+      const bannerColor = isCritical ? '#D9705A' : isHigh ? '#E0A458' : '#5FC9E8';
+      const bannerBg = isCritical
+        ? 'rgba(217, 112, 90, 0.12)'
+        : isHigh
+        ? 'rgba(224, 164, 88, 0.10)'
+        : 'rgba(95, 201, 232, 0.10)';
+      const bannerBorder = isCritical
+        ? 'rgba(217, 112, 90, 0.25)'
+        : isHigh
+        ? 'rgba(224, 164, 88, 0.22)'
+        : 'rgba(95, 201, 232, 0.22)';
+      const scoreColor = isCritical ? '#D9705A' : isHigh ? '#E0A458' : '#5FC9E8';
+
+      return (
+        <div
+          className="w-full min-w-0 rounded-[20px] overflow-hidden shadow-lg"
+          style={{
+            background: 'rgba(13, 17, 22, 0.55)',
+            backdropFilter: 'blur(18px) saturate(140%)',
+            WebkitBackdropFilter: 'blur(18px) saturate(140%)',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+          }}
+        >
+          {/* 1. PLAIN-ENGLISH VERDICT BANNER */}
+          <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              className="rounded-xl px-4 py-3.5 flex items-start gap-3"
+              style={{
+                background: bannerBg,
+                border: `1px solid ${bannerBorder}`,
+              }}
+            >
+              <AlertTriangle className="shrink-0 mt-0.5 h-4 w-4" style={{ color: bannerColor }} />
+              <div className="min-w-0">
+                <p
+                  className="text-sm font-semibold leading-snug"
+                  style={{ color: bannerColor, fontFamily: "'Space Grotesk', sans-serif" }}
+                >
+                  {getVerdictSentence(activeCase.category, activeCase.riskScore)}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-[#7A8794]">
+                  {getVerdictContext(activeCase.category, activeCase.synthesis.tacticsObserved)}
+                </p>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* 2. STAT CARDS */}
+          <div
+            className="grid grid-cols-2 gap-0"
+            style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+          >
+            <div
+              className="flex flex-col items-center justify-center py-5 px-4"
+              style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}
+            >
+              <motion.span
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                className="text-[38px] font-bold font-mono leading-none"
+                style={{ color: scoreColor }}
+              >
+                {activeCase.riskScore}
+              </motion.span>
+              <span className="mt-1.5 text-[10px] font-mono uppercase tracking-wider text-[#4A5560]">
+                risk score
+              </span>
+            </div>
+
+            <div className="flex flex-col items-center justify-center py-5 px-4">
+              <motion.span
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.45, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
+                className="text-[38px] font-bold font-mono leading-none text-[#5FC9E8]"
+              >
+                {confidenceScore}%
+              </motion.span>
+              <span className="mt-1.5 text-[10px] font-mono uppercase tracking-wider text-[#4A5560]">
+                AI confidence
+              </span>
+            </div>
+          </div>
+
+          {/* 3. CONDENSED KEY FINDINGS */}
+          <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-[#4A5560]">
+                Key Findings
+              </span>
+              <span className="text-[10px] font-mono text-[#7A8794]">
+                {keyFindingsList.length} signals
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {keyFindingsList.map((item, idx) => {
+                const isCritical = item.severity === 'critical';
+                const isHigh = item.severity === 'high';
+                const accentColor = isCritical ? '#D9705A' : isHigh ? '#E0A458' : '#5FC9E8';
+
+                return (
+                  <button
+                    key={`sidebar-kf-${item.label}-${idx}`}
+                    type="button"
+                    onClick={() => scrollToEvidenceCard(item.evidenceId)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/[0.08] bg-white/[0.025] hover:border-[#5FC9E8]/40 hover:bg-[#5FC9E8]/10 text-[#E8ECEF] hover:text-[#5FC9E8] cursor-pointer transition-colors text-left group"
+                    title={`Jump to full evidence card for ${item.label}`}
+                  >
+                    <span className="font-medium text-xs group-hover:underline underline-offset-2">
+                      {item.label}
+                    </span>
+                    <span className="font-mono text-[11px] font-bold shrink-0" style={{ color: accentColor }}>
+                      ({item.score} · {item.severity})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 4. TECHNICAL DETAILS TOGGLE */}
+          {renderTechnicalDetailsSection(false)}
+        </div>
       );
     };
 
@@ -992,21 +2243,17 @@ export const InvestigationWorkspace: React.FC<
 
                 <motion.button
                   id="workspace-top-add-evidence-btn"
-                  whileHover={{
-                    scale: 1.04,
-                    boxShadow:
-                      '0 0 16px rgba(95,201,232,0.35)'
-                  }}
+                  whileHover={{ scale: 1.04, boxShadow: '0 0 16px rgba(95,201,232,0.4)' }}
                   whileTap={{ scale: 0.96 }}
                   onClick={() =>
                     setShowAddEvidenceModal(true)
                   }
-                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-[#5FC9E8] px-3 py-2 text-xs font-semibold text-[#0A0D10] shadow-xs transition-colors hover:bg-[#7be2fe] sm:px-4"
+                  className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[#5FC9E8] hover:bg-[#7be2fe] px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs font-semibold text-[#0A0D10] shadow-xs transition-colors"
                   style={{
                     boxShadow: '0 4px 16px -4px rgba(95, 201, 232, 0.4)',
                   }}
                 >
-                  <PlusCircle className="h-3.5 w-3.5" />
+                  <PlusCircle className="h-3.5 w-3.5 text-[#0A0D10]" />
                   <span>Add Evidence</span>
                 </motion.button>
 
@@ -1019,10 +2266,13 @@ export const InvestigationWorkspace: React.FC<
                   }}
                   whileTap={{ scale: 0.96 }}
                   onClick={(e) => {
+                    if (isAnalyzing) return;
                     if (
                       suspiciousMessageInput.trim()
                     ) {
                       handleAnalyzeTextMessage(e);
+                    } else if (lastFailedAnalysis) {
+                      handleRetryAnalysis();
                     } else {
                       setActiveTab('evidence');
 
@@ -1036,7 +2286,7 @@ export const InvestigationWorkspace: React.FC<
                     }
                   }}
                   disabled={isAnalyzing}
-                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[#5FC9E8]/30 bg-[#0D1116] px-3 py-2 text-xs font-semibold text-[#E8ECEF] shadow-xs transition-colors hover:border-[#5FC9E8]/60 sm:px-4"
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[#5FC9E8]/30 bg-[#0D1116] px-3 py-2 text-xs font-semibold text-[#E8ECEF] shadow-xs transition-colors hover:border-[#5FC9E8]/60 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isAnalyzing ? (
                     <>
@@ -1052,24 +2302,19 @@ export const InvestigationWorkspace: React.FC<
                 </motion.button>
 
                 <motion.button
-                  id="btn-open-screenshot-analyzer"
+                  id="workspace-top-image-forensics-btn"
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
-                  onClick={() =>
-                    onNavigate(
-                      'screenshot-analyzer'
-                    )
-                  }
-                  className="hidden shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#0D1116] px-3 py-2 text-xs font-semibold text-[#7A8794] hover:text-[#E8ECEF] transition-colors sm:inline-flex"
+                  onClick={() => onNavigate('screenshot-analyzer')}
+                  className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#0D1116] px-3 py-2 text-xs font-semibold text-[#7A8794] hover:text-[#E8ECEF] hover:border-white/[0.18] transition-colors"
                   title="Deep ELA & Image Manipulation Forensics"
                 >
                   <FileCheck className="h-3.5 w-3.5 text-[#5FC9E8]" />
-                  <span className="hidden md:inline">
-                    Image Forensics
-                  </span>
+                  <span>Image Forensics</span>
                 </motion.button>
 
                 <motion.button
+                  id="workspace-top-export-btn"
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                   onClick={handleExportReport}
@@ -1108,46 +2353,53 @@ export const InvestigationWorkspace: React.FC<
 
               {/* Uppercase Kinetic Headline */}
               <h1
+                key={`dash-h1-group-${activeCase.id}-${activeCase.title}`}
                 className="font-display font-bold text-2xl sm:text-3xl md:text-[34px] lg:text-[38px] text-[#E8ECEF] mb-4 tracking-tight leading-[1.15]"
                 style={{ fontFamily: "'Space Grotesk', sans-serif" }}
               >
                 {/* Line 1 */}
                 <span className="block overflow-visible whitespace-normal sm:whitespace-nowrap">
-                  {['COORDINATED', 'HARASSMENT', 'CAMPAIGN'].map((word, idx) => (
-                    <motion.span
-                      key={`dash-h1-${idx}`}
-                      initial={{ opacity: 0, y: 24, filter: 'blur(6px)' }}
-                      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                      transition={{
-                        duration: 0.55,
-                        delay: 0.15 + idx * 0.07,
-                        ease: [0.16, 1, 0.3, 1],
-                      }}
-                      className="inline-block mr-2.5 sm:mr-3"
-                    >
-                      {word}
-                    </motion.span>
+                  {headlineWords.line1.map((word, idx) => (
+                    <React.Fragment key={`dash-h1-${activeCase.id}-${idx}-${word}`}>
+                      <motion.span
+                        initial={{ opacity: 0, y: 24, filter: 'blur(6px)' }}
+                        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                        transition={{
+                          duration: 0.55,
+                          delay: 0.15 + idx * 0.07,
+                          ease: [0.16, 1, 0.3, 1],
+                        }}
+                        className="inline-block mr-2 sm:mr-2.5"
+                      >
+                        {word}
+                      </motion.span>
+                      {' '}
+                    </React.Fragment>
                   ))}
                 </span>
 
                 {/* Line 2 */}
-                <span className="block overflow-visible whitespace-normal sm:whitespace-nowrap text-[#5FC9E8]">
-                  {['CROSS-PLATFORM'].map((word, idx) => (
-                    <motion.span
-                      key={`dash-h2-${idx}`}
-                      initial={{ opacity: 0, y: 24, filter: 'blur(6px)' }}
-                      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                      transition={{
-                        duration: 0.55,
-                        delay: 0.15 + (3 + idx) * 0.07,
-                        ease: [0.16, 1, 0.3, 1],
-                      }}
-                      className="inline-block mr-2.5 sm:mr-3"
-                    >
-                      {word}
-                    </motion.span>
-                  ))}
-                </span>
+                {headlineWords.line2 && headlineWords.line2.length > 0 && (
+                  <span className="block overflow-visible whitespace-normal sm:whitespace-nowrap text-[#5FC9E8]">
+                    {headlineWords.line2.map((word, idx) => (
+                      <React.Fragment key={`dash-h2-${activeCase.id}-${idx}-${word}`}>
+                        <motion.span
+                          initial={{ opacity: 0, y: 24, filter: 'blur(6px)' }}
+                          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                          transition={{
+                            duration: 0.55,
+                            delay: 0.15 + (headlineWords.line1.length + idx) * 0.07,
+                            ease: [0.16, 1, 0.3, 1],
+                          }}
+                          className="inline-block mr-2 sm:mr-2.5"
+                        >
+                          {word}
+                        </motion.span>
+                        {' '}
+                      </React.Fragment>
+                    ))}
+                  </span>
+                )}
               </h1>
 
               {/* Three Short Stat Lines */}
@@ -1165,7 +2417,7 @@ export const InvestigationWorkspace: React.FC<
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#5FC9E8]" />
-                  <span className="font-mono text-[#E8ECEF]">Text · URL · Screenshot · Audio · Video</span>
+                  <span className="font-mono text-[#E8ECEF]">{evidenceTypesDisplay}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#5FC9E8]" />
@@ -1194,7 +2446,7 @@ export const InvestigationWorkspace: React.FC<
                   }}
                 >
                   <span>Open Investigation</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-4 h-4 text-[#0A0D10]" />
                 </button>
 
                 <button
@@ -1380,15 +2632,27 @@ export const InvestigationWorkspace: React.FC<
                   </span>
                 </div>
 
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  onClick={() =>
-                    setAnalysisError(null)
-                  }
-                  className="shrink-0 cursor-pointer font-mono text-xs font-bold text-[#D9705A]/80 hover:text-[#D9705A]"
-                >
-                  Dismiss
-                </motion.button>
+                <div className="flex items-center gap-3">
+                  {lastFailedAnalysis && (
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleRetryAnalysis}
+                      className="shrink-0 cursor-pointer font-mono text-xs font-bold text-[#5FC9E8] hover:text-[#8ee1f9] underline decoration-[#5FC9E8]/40"
+                    >
+                      Retry Analysis
+                    </motion.button>
+                  )}
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    onClick={() =>
+                      setAnalysisError(null)
+                    }
+                    className="shrink-0 cursor-pointer font-mono text-xs font-bold text-[#D9705A]/80 hover:text-[#D9705A]"
+                  >
+                    Dismiss
+                  </motion.button>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -1472,7 +2736,7 @@ export const InvestigationWorkspace: React.FC<
                     setViewDetailMode('simple')
                   }
                   className={`shrink-0 cursor-pointer rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${viewDetailMode === 'simple'
-                      ? 'bg-[#5FC9E8] text-[#0A0D10] font-bold shadow-xs'
+                      ? 'border border-[#5FC9E8]/40 bg-[#5FC9E8]/15 text-[#5FC9E8] font-bold shadow-xs'
                       : 'text-[#7A8794] hover:text-[#E8ECEF]'
                     }`}
                 >
@@ -1486,7 +2750,7 @@ export const InvestigationWorkspace: React.FC<
                     setViewDetailMode('technical')
                   }
                   className={`shrink-0 cursor-pointer rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${viewDetailMode === 'technical'
-                      ? 'bg-[#151B22] text-[#E8ECEF] font-bold shadow-xs border border-white/[0.06]'
+                      ? 'border border-[#5FC9E8]/40 bg-[#5FC9E8]/15 text-[#5FC9E8] font-bold shadow-xs'
                       : 'text-[#7A8794] hover:text-[#E8ECEF]'
                     }`}
                 >
@@ -1514,1268 +2778,180 @@ export const InvestigationWorkspace: React.FC<
           </div>
 
           {/* =========================================================
-            MAIN RESPONSIVE GRID
+            MAIN WORKSPACE CONTENT (SIMPLE VIEW VS TECHNICAL VIEW)
         ========================================================= */}
 
-          <div className="grid min-w-0 grid-cols-1 gap-8 xl:grid-cols-12">
+          {viewDetailMode === 'simple' ? (
+            /* =======================================================
+               SIMPLE VIEW (Optimized for non-technical users)
+            ======================================================= */
+            <div className="min-w-0 space-y-6 max-w-4xl mx-auto">
+              {/* Top: 3-Card Summary Strip (Risk Level, AI Confidence, Evidence Count) */}
+              <div className="flex justify-center w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 w-full max-w-2xl">
+                  {/* 1. Risk Level */}
+                  <div className="rounded-2xl border border-white/[0.08] bg-[#0D1116]/80 backdrop-blur-md p-5 text-center flex flex-col items-center justify-center shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="text-3xl sm:text-4xl font-bold font-mono leading-none"
+                        style={{
+                          color:
+                            activeCase.riskScore >= 75
+                              ? '#D9705A'
+                              : activeCase.riskScore >= 50
+                              ? '#E0A458'
+                              : '#5FC9E8',
+                        }}
+                      >
+                        {activeCase.riskScore}
+                      </span>
+                      <span
+                        className="text-xs font-mono uppercase font-bold px-2 py-0.5 rounded-md"
+                        style={{
+                          color:
+                            activeCase.riskScore >= 75
+                              ? '#D9705A'
+                              : activeCase.riskScore >= 50
+                              ? '#E0A458'
+                              : '#5FC9E8',
+                          backgroundColor:
+                            activeCase.riskScore >= 75
+                              ? 'rgba(217,112,90,0.15)'
+                              : activeCase.riskScore >= 50
+                              ? 'rgba(224,164,88,0.15)'
+                              : 'rgba(95,201,232,0.15)',
+                        }}
+                      >
+                        {activeCase.overallRisk}
+                      </span>
+                    </div>
+                    <span className="mt-2 text-xs font-mono uppercase tracking-wider text-[#7A8794]">
+                      Risk Level
+                    </span>
+                  </div>
 
-            {/* =======================================================
-              LEFT COLUMN
-          ======================================================= */}
+                  {/* 2. AI Confidence */}
+                  <div className="rounded-2xl border border-white/[0.08] bg-[#0D1116]/80 backdrop-blur-md p-5 text-center flex flex-col items-center justify-center shadow-xs">
+                    <span className="text-3xl sm:text-4xl font-bold font-mono leading-none text-[#5FC9E8]">
+                      {confidenceScore}%
+                    </span>
+                    <span className="mt-2 text-xs font-mono uppercase tracking-wider text-[#7A8794]">
+                      AI Confidence
+                    </span>
+                  </div>
 
-            <div className="min-w-0 space-y-6 xl:col-span-8">
-
-              {/* =====================================================
-                TAB NAVIGATION
-            ===================================================== */}
-
-              <div className="flex w-full min-w-0 items-center gap-2 overflow-x-auto border-b border-white/[0.06] pb-2 scrollbar-thin">
-
-                {/* EVIDENCE */}
-
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() =>
-                    setActiveTab('evidence')
-                  }
-                  className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-colors sm:text-sm ${activeTab === 'evidence'
-                      ? 'border border-[#5FC9E8]/30 bg-[#0D1116] text-[#E8ECEF] shadow-xs'
-                      : 'text-[#7A8794] hover:bg-white/[0.03] hover:text-[#E8ECEF]'
-                    }`}
-                >
-                  <Layers className="h-4 w-4 text-[#5FC9E8]" />
-
-                  <span>
-                    Evidence Artifacts (
-                    {activeCase.evidence.length})
-                  </span>
-                </motion.button>
-
-                {/* TIMELINE */}
-
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() =>
-                    setActiveTab('timeline')
-                  }
-                  className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-colors sm:text-sm ${activeTab === 'timeline'
-                      ? 'border border-[#5FC9E8]/30 bg-[#0D1116] text-[#E8ECEF] shadow-xs'
-                      : 'text-[#7A8794] hover:bg-white/[0.03] hover:text-[#E8ECEF]'
-                    }`}
-                >
-                  <Clock className="h-4 w-4 text-[#5FC9E8]" />
-
-                  <span>
-                    Timeline (
-                    {activeCase.timeline.length})
-                  </span>
-                </motion.button>
-
-                {/* ACTIONS */}
-
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() =>
-                    setActiveTab('actions')
-                  }
-                  className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-colors sm:text-sm ${activeTab === 'actions'
-                      ? 'border border-[#5FC9E8]/30 bg-[#0D1116] text-[#E8ECEF] shadow-xs'
-                      : 'text-[#7A8794] hover:bg-white/[0.03] hover:text-[#E8ECEF]'
-                    }`}
-                >
-                  <CheckCircle2 className="h-4 w-4 text-[#5FC9E8]" />
-
-                  <span>
-                    Action Checklist (
-                    {
-                      activeCase.actionPlan.filter(
-                        (a) => a.isCompleted
-                      ).length
-                    }
-                    /{activeCase.actionPlan.length})
-                  </span>
-                </motion.button>
-
+                  {/* 3. Evidence Count */}
+                  <div className="rounded-2xl border border-white/[0.08] bg-[#0D1116]/80 backdrop-blur-md p-5 text-center flex flex-col items-center justify-center shadow-xs">
+                    <span className="text-3xl sm:text-4xl font-bold font-mono leading-none text-[#E8ECEF]">
+                      {activeCase.evidence.length}
+                    </span>
+                    <span className="mt-2 text-xs font-mono uppercase tracking-wider text-[#7A8794]">
+                      Evidence Count
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              {/* =====================================================
-                EVIDENCE TAB
-            ===================================================== */}
-
-              {activeTab === 'evidence' && (
-                <div className="min-w-0 space-y-4">
-
-                  {/* AI ANALYZER */}
-
-                  <div className="w-full min-w-0 space-y-4 rounded-3xl border border-white/[0.08] bg-[#0D1116]/80 p-4 shadow-lg shadow-black/40 sm:p-5">
-
-                    {/* ANALYZER HEADER */}
-
-                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
-
-                      <div className="flex min-w-0 items-center gap-2.5">
-
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[#5FC9E8]/20 bg-[#5FC9E8]/10 text-[#5FC9E8]">
-                          <Sparkles className="h-4 w-4" />
-                        </div>
-
-                        <div className="min-w-0">
-
-                          <div className="flex min-w-0 flex-wrap items-center gap-2">
-
-                            <h4 className="min-w-0 text-sm font-bold text-white">
-                              AI Suspicious Message Analyzer
-                            </h4>
-
-                            <LiveStatusIndicator
-                              size="sm"
-                              status="active"
-                              label="Live Gemini 3.6 Flash"
-                            />
-
-                          </div>
-
-                          <p className="text-xs text-[#7A8794]">
-                            Paste any suspicious message to
-                            extract risk indicators and response
-                            steps.
-                          </p>
-
-                        </div>
-
-                      </div>
-
-                      <div className="flex shrink-0 flex-wrap items-center gap-2">
-
-                        <motion.button
-                          type="button"
-                          whileHover={{ scale: 1.03 }}
-                          whileTap={{ scale: 0.97 }}
-                          onClick={() =>
-                            setShowAddEvidenceModal(true)
-                          }
-                          className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-white/[0.08] bg-[#06080B] px-3.5 py-2 text-xs font-semibold text-[#E8ECEF] transition-colors hover:bg-white/[0.04]"
-                        >
-                          <PlusCircle className="h-3.5 w-3.5 text-[#5FC9E8]" />
-                          <span>Add Evidence</span>
-                        </motion.button>
-
-                        <motion.button
-                          type="button"
-                          id="btn-analyze-suspicious-message-top"
-                          whileHover={{
-                            scale: 1.03,
-                            boxShadow:
-                              '0 0 20px rgba(95,201,232,0.35)'
-                          }}
-                          whileTap={{ scale: 0.97 }}
-                          onClick={
-                            handleAnalyzeTextMessage
-                          }
-                          disabled={
-                            isAnalyzing ||
-                            !suspiciousMessageInput.trim()
-                          }
-                          className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-[#5FC9E8] px-4 py-2 text-xs font-semibold text-[#0A0D10] shadow-md transition-all hover:bg-[#7be2fe] disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {isAnalyzing ? (
-                            <>
-                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                              <span>Analyzing...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="h-3.5 w-3.5" />
-                              <span>Analyse</span>
-                            </>
-                          )}
-                        </motion.button>
-
-                      </div>
-                    </div>
-
-                    {/* ANALYZER FORM */}
-
-                    <form
-                      onSubmit={
-                        handleAnalyzeTextMessage
-                      }
-                      className="min-w-0 space-y-3"
-                    >
-
-                      <textarea
-                        id="ai-analyzer-textarea"
-                        rows={3}
-                        value={
-                          suspiciousMessageInput
-                        }
-                        onChange={(e) => {
-                          setSuspiciousMessageInput(
-                            e.target.value
-                          );
-
-                          if (analysisError) {
-                            setAnalysisError(null);
-                          }
-                        }}
-                        placeholder="Paste suspicious message here (e.g. 'URGENT: Your account was compromised. Click https://... to verify now')..."
-                        className="block w-full min-w-0 resize-y rounded-2xl border border-white/[0.08] bg-[#06080B] px-3.5 py-2.5 text-xs font-sans text-[#E8ECEF] placeholder-[#4A5560] focus:border-[#5FC9E8] focus:outline-hidden focus:ring-2 focus:ring-[#5FC9E8]/30"
-                        disabled={isAnalyzing}
-                      />
-
-                      {/* QUICK SAMPLES */}
-
-                      <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-
-                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-
-                          <span className="mr-1 shrink-0 text-[10px] font-mono uppercase text-[#4A5560]">
-                            Quick Samples:
-                          </span>
-
-                          {[
-                            {
-                              label: 'Netflix Phish',
-                              text: 'URGENT: Your Netflix account has been suspended due to billing error. Update immediately at https://netflix-billing-update.me/auth or access will be permanently deleted in 2 hours.'
-                            },
-                            {
-                              label: 'Bank Smish',
-                              text: 'Bank Alert: Unrecognized $1,420.00 wire transfer from your Chase Checking. If not you, confirm via https://chase-fraud-prevention.online/resolve immediately.'
-                            },
-                            {
-                              label: 'Extortion Bluff',
-                              text: 'I have recorded video of you from your webcam. If you do not send $800 in Bitcoin to bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh within 24 hours, I will distribute this to all your contacts.'
-                            }
-                          ].map((sample) => (
-                            <motion.button
-                              key={sample.label}
-                              type="button"
-                              whileHover={{ y: -1, scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                              onClick={() =>
-                                setSuspiciousMessageInput(sample.text)
-                              }
-                              className="shrink-0 cursor-pointer rounded-lg border border-white/[0.08] px-2.5 py-1 text-[11px] font-mono text-[#7A8794] transition-all duration-150 hover:border-[#5FC9E8]/40 hover:text-[#E8ECEF]"
-                              style={{
-                                background: 'rgba(255, 255, 255, 0.03)',
-                                backdropFilter: 'blur(10px)',
-                              }}
-                            >
-                              {sample.label}
-                            </motion.button>
-                          ))}
-
-                        </div>
-
-                        <div className="flex shrink-0 items-center gap-2">
-
-                          {suspiciousMessageInput && (
-                            <motion.button
-                              type="button"
-                              whileHover={{
-                                scale: 1.05
-                              }}
-                              onClick={() =>
-                                setSuspiciousMessageInput(
-                                  ''
-                                )
-                              }
-                              className="cursor-pointer px-3 py-1.5 text-xs text-[#7A8794] hover:text-white"
-                            >
-                              Clear
-                            </motion.button>
-                          )}
-
-                          <motion.button
-                            type="submit"
-                            id="btn-analyze-suspicious-message"
-                            whileHover={{
-                              scale: 1.03,
-                              boxShadow:
-                                '0 0 20px rgba(95,201,232,0.35)'
-                            }}
-                            whileTap={{
-                              scale: 0.97
-                            }}
-                            disabled={
-                              isAnalyzing ||
-                              !suspiciousMessageInput.trim()
-                            }
-                            className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-[#5FC9E8] px-5 py-2 text-xs font-semibold text-[#0A0D10] shadow-md transition-all hover:bg-[#7be2fe] disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {isAnalyzing ? (
-                              <>
-                                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                                <span>
-                                  Analyzing...
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <Sparkles className="h-3.5 w-3.5" />
-                                <span>Analyse</span>
-                              </>
-                            )}
-                          </motion.button>
-
-                        </div>
-                      </div>
-                    </form>
-                  </div>
-
-                  {/* LOADING */}
-
-                  {isAnalyzing && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="min-w-0 space-y-4"
-                    >
-                      <EvidenceCardSkeleton />
-                      <EvidenceCardSkeleton />
-                    </motion.div>
-                  )}
-
-                  {/* EVIDENCE HEADER */}
-
-                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 pt-2">
-
-                    <h3 className="text-base font-semibold text-[#E8ECEF]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                      Ingested Digital Evidence
-                    </h3>
-
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() =>
-                        setShowAddEvidenceModal(true)
-                      }
-                      className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-[#5FC9E8] px-3.5 py-1.5 text-xs font-semibold text-[#0A0D10] shadow-xs transition-colors hover:bg-[#7be2fe]"
-                    >
-                      <PlusCircle className="h-3.5 w-3.5" />
-                      <span>Add Evidence</span>
-                    </motion.button>
-
-                  </div>
-
-                  {/* EVIDENCE CARDS */}
-
-                  {(() => {
-                    const isVisualEvidence = (type: string) => {
-                      const t = type.toLowerCase();
-                      return t === 'video' || t === 'screenshot' || t === 'image' || t === 'file';
-                    };
-
-                    const sortedEvidence = [...activeCase.evidence].sort((a, b) => {
-                      const aVisual = isVisualEvidence(a.type);
-                      const bVisual = isVisualEvidence(b.type);
-
-                      // 1. Video and screenshot/image always appear first
-                      if (aVisual && !bVisual) return -1;
-                      if (!aVisual && bVisual) return 1;
-
-                      // 2. Within the group, sort by risk score descending
-                      return b.riskScore - a.riskScore;
-                    });
-                    const initialEvidence = sortedEvidence.slice(0, 2);
-                    const extraEvidence = sortedEvidence.slice(2);
-                    const hiddenCount = extraEvidence.length;
-
-                    return (
-                      <div className="space-y-4">
-                        <AnimatePresence initial={false}>
-                          {initialEvidence.map((ev, idx) => (
-                            <EvidenceCard
-                              key={ev.id}
-                              ev={ev}
-                              idx={idx}
-                              isExpanded={!!expandedEvidenceIds[ev.id]}
-                              onToggleExpand={() => toggleEvidenceDetails(ev.id)}
-                            />
-                          ))}
-
-                          {showAllEvidence && (
-                            <motion.div
-                              key="extra-evidence"
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
-                              exit={{ opacity: 0, height: 0 }}
-                              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                              className="space-y-4 overflow-hidden"
-                            >
-                              {extraEvidence.map((ev, idx) => (
-                                <EvidenceCard
-                                  key={ev.id}
-                                  ev={ev}
-                                  idx={idx + 2}
-                                  isExpanded={!!expandedEvidenceIds[ev.id]}
-                                  onToggleExpand={() => toggleEvidenceDetails(ev.id)}
-                                />
-                              ))}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-
-                        {hiddenCount > 0 && (
-                          <div className="flex justify-center pt-1">
-                            <button
-                              type="button"
-                              onClick={() => setShowAllEvidence((prev) => !prev)}
-                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#5FC9E8] hover:text-[#7be2fe] transition-colors cursor-pointer py-1.5 px-3 rounded-xl hover:bg-white/[0.04]"
-                            >
-                              <span>
-                                {showAllEvidence
-                                  ? 'Show less'
-                                  : `Show ${hiddenCount} more`}
-                              </span>
-                              {showAllEvidence ? (
-                                <ChevronUp className="w-3.5 h-3.5" />
-                              ) : (
-                                <ChevronDown className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                </div>
-              )}
-
-              {/* =====================================================
-                TIMELINE TAB
-            ===================================================== */}
-
-              {activeTab === 'timeline' && (
-                <div className="min-w-0 space-y-4">
-
-                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-
-                    <h3 className="text-base font-semibold text-[#E8ECEF]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                      Incident Chronology & Reconstruction
-                    </h3>
-
-                    <span className="shrink-0 text-xs font-mono text-[#7A8794]">
-                      Automated Correlation
-                    </span>
-
-                  </div>
-
-                  <div
-                    className="w-full min-w-0 space-y-6 rounded-[20px] p-4 sm:p-6 shadow-lg"
-                    style={{
-                      background: 'rgba(13, 17, 22, 0.55)',
-                      backdropFilter: 'blur(18px) saturate(140%)',
-                      WebkitBackdropFilter: 'blur(18px) saturate(140%)',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
-                    }}
-                  >
-
-                    {activeCase.timeline.map(
-                      (event, idx) => {
-                        const isHighSeverity = event.severity === 'high' || event.severity === 'critical';
-                        const isMedSeverity = event.severity === 'medium';
-                        const dotColor = isHighSeverity ? '#D9705A' : isMedSeverity ? '#E0A458' : '#5FC9E8';
-
-                        return (
-                          <motion.div
-                            key={event.id}
-                            initial={{
-                              opacity: 0,
-                              x: -8
-                            }}
-                            animate={{
-                              opacity: 1,
-                              x: 0
-                            }}
-                            transition={{
-                              delay: idx * 0.06
-                            }}
-                            className="relative min-w-0 border-l-2 pb-6 pl-6 last:border-l-0 last:pb-0"
-                            style={{
-                              borderColor: 'rgba(95, 201, 232, 0.2)',
-                            }}
-                          >
-
-                            <div
-                              className="absolute -left-[9px] top-0 h-4 w-4 rounded-full border-2 border-[#06080B]"
-                              style={{
-                                backgroundColor: dotColor,
-                                boxShadow: isHighSeverity ? '0 0 14px rgba(217, 112, 90, 0.65)' : 'none',
-                              }}
-                            />
-
-                            <div className="flex min-w-0 flex-wrap items-center gap-2 pb-1">
-
-                              <span
-                                className="shrink-0 rounded-md px-2 py-0.5 text-xs font-bold font-mono"
-                                style={{
-                                  backgroundColor: `${dotColor}18`,
-                                  color: dotColor,
-                                  border: `1px solid ${dotColor}33`,
-                                }}
-                              >
-                                {event.timestamp}
-                              </span>
-
-                              <span className="shrink-0 rounded-md border border-white/[0.06] bg-[#06080B]/80 px-2 py-0.5 text-xs font-mono text-[#7A8794]">
-                                Phase: {event.phase}
-                              </span>
-
-                            </div>
-
-                            <h4 className="mt-1 break-words text-sm font-semibold text-[#E8ECEF]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                              {event.title}
-                            </h4>
-
-                            <p className="mt-1 break-words text-xs leading-relaxed text-[#7A8794]">
-                              {event.description}
-                            </p>
-
-                          </motion.div>
-                        );
-                      }
-                    )}
-
-                  </div>
-                </div>
-              )}
-
-              {/* =====================================================
-                ACTION TAB
-            ===================================================== */}
-
-              {activeTab === 'actions' && (
-                <div className="min-w-0 space-y-4">
-
-                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-
-                    <h3 className="text-base font-semibold text-[#E8ECEF]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                      Situation-Specific Recovery
-                      Actions
-                    </h3>
-
-                    <span className="shrink-0 text-xs font-mono text-[#7A8794]">
-                      Progress:{' '}
-                      {
-                        activeCase.actionPlan.filter(
-                          (a) => a.isCompleted
-                        ).length
-                      }{' '}
-                      /{' '}
-                      {
-                        activeCase.actionPlan.length
-                      }{' '}
-                      completed
-                    </span>
-
-                  </div>
-
-                  <div className="min-w-0 space-y-3">
-
-                    {activeCase.actionPlan.map(
-                      (act, idx) => (
-                        <motion.div
-                          key={act.id}
-                          initial={{
-                            opacity: 0,
-                            y: 8
-                          }}
-                          animate={{
-                            opacity: 1,
-                            y: 0
-                          }}
-                          transition={{
-                            delay: idx * 0.05
-                          }}
-                          whileHover={{ x: 3 }}
-                          onClick={() =>
-                            handleToggleAction(
-                              act.id
-                            )
-                          }
-                          className={`flex min-w-0 cursor-pointer items-start gap-3.5 rounded-3xl border p-4 transition-all ${act.isCompleted
-                              ? 'border-[#5FC9E8]/30 bg-[#5FC9E8]/5'
-                              : 'border-white/[0.06] bg-[#0D1116]/70 shadow-xs hover:border-white/[0.12]'
-                            }`}
-                        >
-
-                          <input
-                            type="checkbox"
-                            checked={
-                              act.isCompleted
-                            }
-                            onChange={() => { }}
-                            className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-md accent-[#5FC9E8]"
-                          />
-
-                          <div className="min-w-0 flex-1">
-
-                            <div className="flex min-w-0 flex-wrap items-center gap-2">
-
-                              <span
-                                className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold font-mono uppercase tracking-wider ${act.priority ===
-                                    'urgent'
-                                    ? 'border border-[#D9705A]/20 bg-[#D9705A]/10 text-[#D9705A]'
-                                    : act.priority ===
-                                      'high'
-                                      ? 'border border-[#E0A458]/20 bg-[#E0A458]/10 text-[#E0A458]'
-                                      : 'border border-white/[0.08] bg-[#06080B] text-[#7A8794]'
-                                  }`}
-                              >
-                                {act.priority}
-                              </span>
-
-                              <span className="break-words text-xs font-mono text-[#7A8794]">
-                                {act.category}
-                              </span>
-
-                            </div>
-
-                            <h4
-                              className={`mt-1 break-words text-sm font-semibold ${act.isCompleted
-                                  ? 'text-[#7A8794] line-through'
-                                  : 'text-[#E8ECEF]'
-                                }`}
-                            >
-                              {act.title}
-                            </h4>
-
-                            <p className="mt-1 break-words text-xs leading-relaxed text-[#7A8794]">
-                              {act.description}
-                            </p>
-
-                            {act.actionLinks && act.actionLinks.length > 0 ? (
-                              <div className="mt-2.5 flex flex-col gap-1.5">
-                                {act.actionLinks.map((link, lIdx) => (
-                                  <a
-                                    key={lIdx}
-                                    href={link.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) =>
-                                      e.stopPropagation()
-                                    }
-                                    className="inline-flex max-w-full items-center gap-1.5 break-words text-xs font-semibold text-[#5FC9E8] hover:text-[#8ee1f9] transition-colors"
-                                  >
-                                    <span>{link.label}</span>
-                                    <ExternalLink className="h-3 w-3 shrink-0" />
-                                  </a>
-                                ))}
-                              </div>
-                            ) : act.actionTarget ? (
-                              <a
-                                href={
-                                  act.actionTarget
-                                }
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) =>
-                                  e.stopPropagation()
-                                }
-                                className="mt-2 inline-flex max-w-full items-center gap-1 break-words text-xs font-semibold text-[#5FC9E8] hover:text-[#8ee1f9]"
-                              >
-                                <span>
-                                  Open Takedown Tool
-                                </span>
-                                <ExternalLink className="h-3 w-3 shrink-0" />
-                              </a>
-                            ) : null}
-
-                          </div>
-
-                        </motion.div>
-                      )
-                    )}
-
-                  </div>
-                </div>
-              )}
-
-            </div>
-
-            {/* =======================================================
-              RIGHT COLUMN — Unified Forensic Summary Panel
-          ======================================================= */}
-
-            <div className="min-w-0 xl:col-span-4">
-
-              {/* =====================================================
-                UNIFIED FORENSIC SUMMARY PANEL
-              ===================================================== */}
+              {/* Plain-English Verdict Banner */}
               <div
-                className="w-full min-w-0 rounded-[20px] overflow-hidden shadow-lg"
+                className="rounded-2xl border p-4 sm:p-5 flex items-start gap-3.5"
                 style={{
-                  background: 'rgba(13, 17, 22, 0.55)',
-                  backdropFilter: 'blur(18px) saturate(140%)',
-                  WebkitBackdropFilter: 'blur(18px) saturate(140%)',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  background:
+                    activeCase.riskScore >= 75
+                      ? 'rgba(217, 112, 90, 0.10)'
+                      : 'rgba(95, 201, 232, 0.10)',
+                  borderColor:
+                    activeCase.riskScore >= 75
+                      ? 'rgba(217, 112, 90, 0.25)'
+                      : 'rgba(95, 201, 232, 0.25)',
                 }}
               >
-
-                {/* --- 1. PLAIN-ENGLISH VERDICT BANNER --- */}
-                {(() => {
-                  const isCritical = activeCase.riskScore >= 90;
-                  const isHigh = activeCase.riskScore >= 70;
-                  const bannerColor = isCritical ? '#D9705A' : isHigh ? '#E0A458' : '#5FC9E8';
-                  const bannerBg = isCritical
-                    ? 'rgba(217, 112, 90, 0.12)'
-                    : isHigh
-                    ? 'rgba(224, 164, 88, 0.10)'
-                    : 'rgba(95, 201, 232, 0.10)';
-                  const bannerBorder = isCritical
-                    ? 'rgba(217, 112, 90, 0.25)'
-                    : isHigh
-                    ? 'rgba(224, 164, 88, 0.22)'
-                    : 'rgba(95, 201, 232, 0.22)';
-
-                  return (
-                    <div
-                      className="px-5 pt-5 pb-4"
-                      style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
-                    >
-                      <motion.div
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                        className="rounded-xl px-4 py-3.5 flex items-start gap-3"
-                        style={{
-                          background: bannerBg,
-                          border: `1px solid ${bannerBorder}`,
-                        }}
-                      >
-                        <AlertTriangle
-                          className="shrink-0 mt-0.5 h-4 w-4"
-                          style={{ color: bannerColor }}
-                        />
-                        <div className="min-w-0">
-                          <p
-                            className="text-sm font-semibold leading-snug"
-                            style={{ color: bannerColor, fontFamily: "'Space Grotesk', sans-serif" }}
-                          >
-                            {getVerdictSentence(activeCase.category, activeCase.riskScore)}
-                          </p>
-                          <p className="mt-1 text-xs leading-relaxed text-[#7A8794]">
-                            {getVerdictContext(activeCase.category, activeCase.synthesis.tacticsObserved)}
-                          </p>
-                        </div>
-                      </motion.div>
-                    </div>
-                  );
-                })()}
-
-                {/* --- 2. STAT CARDS: RISK SCORE + AI CONFIDENCE --- */}
-                {(() => {
-                  const isCritical = activeCase.riskScore >= 90;
-                  const isHigh = activeCase.riskScore >= 70;
-                  const scoreColor = isCritical ? '#D9705A' : isHigh ? '#E0A458' : '#5FC9E8';
-
-                  // Derive confidence from existing metadata
-                  const confidenceFromMeta = (() => {
-                    for (const ev of activeCase.evidence) {
-                      if (ev.metadata?.['AI Confidence']) {
-                        const parsed = parseInt(ev.metadata['AI Confidence'], 10);
-                        if (!isNaN(parsed)) return parsed;
-                      }
-                    }
-                    // Fallback: estimate from risk score
-                    return Math.min(98, Math.round(activeCase.riskScore * 1.08 + 10));
-                  })();
-
-                  return (
-                    <div
-                      className="grid grid-cols-2 gap-0"
-                      style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
-                    >
-                      {/* Risk Score */}
-                      <div
-                        className="flex flex-col items-center justify-center py-5 px-4"
-                        style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}
-                      >
-                        <motion.span
-                          initial={{ opacity: 0, scale: 0.8 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                          className="text-[38px] font-bold font-mono leading-none"
-                          style={{ color: scoreColor }}
-                        >
-                          {activeCase.riskScore}
-                        </motion.span>
-                        <span className="mt-1.5 text-[10px] font-mono uppercase tracking-wider text-[#4A5560]">
-                          risk score
-                        </span>
-                      </div>
-
-                      {/* AI Confidence */}
-                      <div className="flex flex-col items-center justify-center py-5 px-4">
-                        <motion.span
-                          initial={{ opacity: 0, scale: 0.8 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ duration: 0.45, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
-                          className="text-[38px] font-bold font-mono leading-none text-[#5FC9E8]"
-                        >
-                          {confidenceFromMeta}%
-                        </motion.span>
-                        <span className="mt-1.5 text-[10px] font-mono uppercase tracking-wider text-[#4A5560]">
-                          AI confidence
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* --- 3. EVIDENCE FOUND LIST (TACTICS) --- */}
-                <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <span className="block mb-3 text-[10px] font-mono uppercase tracking-wider text-[#4A5560]">
-                    Evidence found
-                  </span>
-
-                  <div className="space-y-2.5 min-w-0">
-                    {(() => {
-                      const isVisualType = (type: string) => {
-                        const t = type.toLowerCase();
-                        return t === 'video' || t === 'screenshot' || t === 'image' || t === 'file';
-                      };
-
-                      const isVisualTactic = (tactic: string, matchingEv?: EvidenceItem) => {
-                        if (matchingEv && isVisualType(matchingEv.type)) {
-                          return true;
-                        }
-                        const lower = tactic.toLowerCase();
-                        return (
-                          lower.includes('video') ||
-                          lower.includes('deepfake') ||
-                          lower.includes('synthetic media') ||
-                          lower.includes('screenshot') ||
-                          lower.includes('image') ||
-                          lower.includes('mfa prompt') ||
-                          lower.includes('fatigue')
-                        );
-                      };
-
-                      const scoredTactics = activeCase.synthesis.tacticsObserved.map((tactic, idx) => {
-                        const lower = tactic.toLowerCase();
-                        const matchingEv = activeCase.evidence.find(
-                          (ev) =>
-                            ev.title.toLowerCase().includes(lower) ||
-                            ev.indicators.some((ind) =>
-                              ind.toLowerCase().includes(lower)
-                            ) ||
-                            ((lower.includes('video') || lower.includes('synthetic media') || lower.includes('deepfake')) && ev.type === 'video') ||
-                            ((lower.includes('fatigue') || lower.includes('prompt')) && ev.type === 'screenshot') ||
-                            (lower.includes('smish') && ev.type === 'message') ||
-                            (lower.includes('proxy') && ev.type === 'url') ||
-                            ((lower.includes('voice') || lower.includes('acoustic')) && ev.type === 'audio')
-                        );
-
-                        const isVideoOrDeepfake =
-                          lower.includes('synthetic media') || lower.includes('deepfake');
-
-                        const tacticScore = isVideoOrDeepfake
-                          ? 68
-                          : (matchingEv?.riskScore ?? activeCase.evidence[idx]?.riskScore ?? activeCase.riskScore);
-
-                        const isVisual = isVisualTactic(tactic, matchingEv);
-
-                        return {
-                          tactic,
-                          tacticScore,
-                          isVisual,
-                          idx
-                        };
-                      }).sort((a, b) => {
-                        // 1. Video and screenshot/image always appear first
-                        if (a.isVisual && !b.isVisual) return -1;
-                        if (!a.isVisual && b.isVisual) return 1;
-
-                        // 2. Within that group, sort by risk score descending
-                        return b.tacticScore - a.tacticScore;
-                      });
-
-                      const initialTactics = scoredTactics.slice(0, 2);
-                      const extraTactics = scoredTactics.slice(2);
-                      const hiddenTacticsCount = extraTactics.length;
-
-                      const renderTacticItem = (
-                        { tactic, tacticScore, idx }: { tactic: string; tacticScore: number; idx: number },
-                        renderIdx: number
-                      ) => {
-                        const isCritical = tacticScore >= 90;
-                        const isHighScore = tacticScore >= 70 || tactic.toLowerCase().includes('deepfake') || tactic.toLowerCase().includes('synthetic media');
-                        const accentColor = isCritical ? '#D9705A' : isHighScore ? '#E0A458' : '#5FC9E8';
-                        const severityLabel = isCritical ? 'critical' : isHighScore ? 'high' : 'medium';
-                        const displayName = getTacticPlainLanguage(tactic);
-                        const description = getTacticDescription(tactic);
-
-                        return (
-                          <motion.div
-                            key={`${tactic}-${idx}`}
-                            initial={{ opacity: 0, x: -8 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.35, delay: 0.06 + renderIdx * 0.05, ease: 'easeOut' }}
-                            className="rounded-lg pl-3 pr-3 py-2.5 min-w-0"
-                            style={{
-                              background: 'rgba(255,255,255,0.025)',
-                              borderLeft: `3px solid ${accentColor}`,
-                            }}
-                          >
-                            {/* Top line: tactic name + score · severity */}
-                            <div className="flex items-center justify-between gap-2 min-w-0">
-                              <span
-                                className="font-semibold text-xs text-[#E8ECEF] leading-snug break-words min-w-0"
-                                style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-                              >
-                                {displayName}
-                              </span>
-                              <span
-                                className="shrink-0 text-[10px] font-mono font-bold whitespace-nowrap"
-                                style={{ color: accentColor }}
-                              >
-                                {tacticScore} · {severityLabel}
-                              </span>
-                            </div>
-                            {/* Second line: plain-English description */}
-                            <p className="mt-1 text-[11px] leading-relaxed text-[#7A8794]">
-                              {description}
-                            </p>
-                          </motion.div>
-                        );
-                      };
-
-                      return (
-                        <>
-                          <div className="space-y-2.5 min-w-0">
-                            {initialTactics.map((item, i) => renderTacticItem(item, i))}
-                          </div>
-
-                          <AnimatePresence initial={false}>
-                            {showAllTactics && (
-                              <motion.div
-                                key="extra-tactics"
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: 'auto' }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                                className="space-y-2.5 overflow-hidden pt-2.5"
-                              >
-                                {extraTactics.map((item, i) => renderTacticItem(item, i + 2))}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-
-                          {hiddenTacticsCount > 0 && (
-                            <div className="pt-2">
-                              <button
-                                type="button"
-                                onClick={() => setShowAllTactics((prev) => !prev)}
-                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#5FC9E8] hover:text-[#7be2fe] transition-colors cursor-pointer"
-                              >
-                                <span>
-                                  {showAllTactics
-                                    ? 'Show less'
-                                    : `Show ${hiddenTacticsCount} more`}
-                                </span>
-                                {showAllTactics ? (
-                                  <ChevronUp className="w-3.5 h-3.5" />
-                                ) : (
-                                  <ChevronDown className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-
-                {/* --- 4. TECHNICAL DETAILS TOGGLE --- */}
-                <div>
-                  <button
-                    type="button"
-                    id="btn-toggle-technical-details"
-                    onClick={() => setTechnicalOpen(prev => !prev)}
-                    className="flex w-full cursor-pointer items-center justify-between gap-3 px-5 py-4 text-xs font-semibold text-[#7A8794] hover:text-[#E8ECEF] transition-colors"
+                <AlertTriangle
+                  className="shrink-0 mt-0.5 h-5 w-5"
+                  style={{ color: activeCase.riskScore >= 75 ? '#D9705A' : '#5FC9E8' }}
+                />
+                <div className="min-w-0">
+                  <p
+                    className="text-sm sm:text-base font-semibold leading-snug"
+                    style={{
+                      color: activeCase.riskScore >= 75 ? '#D9705A' : '#5FC9E8',
+                      fontFamily: "'Space Grotesk', sans-serif",
+                    }}
                   >
-                    <span className="flex items-center gap-2">
-                      <Lock className="h-3.5 w-3.5 text-[#5FC9E8]" />
-                      View technical details, chain of custody
-                    </span>
-                    {technicalOpen
-                      ? <ChevronUp className="h-3.5 w-3.5 text-[#5FC9E8]" />
-                      : <ChevronDown className="h-3.5 w-3.5 text-[#5FC9E8]" />
-                    }
-                  </button>
-
-                  <AnimatePresence>
-                    {technicalOpen && (
-                      <motion.div
-                        key="tech-details"
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                        className="overflow-hidden"
-                        onAnimationComplete={(definition) => {
-                          // Diagnostic: confirm when this fires and with what value.
-                          // In Chrome this typically fires after layout has settled;
-                          // in Safari/WebKit it can fire before the layout engine has
-                          // committed the new height, so getBoundingClientRect may
-                          // still return 0×0 at this exact moment.
-                          console.log(
-                            '[InvestigationWorkspace] onAnimationComplete',
-                            definition,
-                            new Date().toISOString(),
-                          );
-
-                          if (definition === 'animate') {
-                            // Immediate call — works reliably in Chrome/Blink.
-                            constellationRef.current?.remeasure();
-
-                            // Safari/WebKit fallback: wait two animation frames so the
-                            // browser has a chance to commit the new layout and paint,
-                            // then try again with a 80ms buffer on top for good measure.
-                            // remeasure() is idempotent — calling it twice is harmless.
-                            requestAnimationFrame(() => {
-                              requestAnimationFrame(() => {
-                                setTimeout(() => {
-                                  constellationRef.current?.remeasure();
-                                }, 80);
-                              });
-                            });
-                          }
-                        }}
-                      >
-                        <div
-                          className="px-5 pb-5 space-y-5"
-                          style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
-                        >
-                          {/* FORENSIC ASSESSMENT DETAIL */}
-                          <div className="pt-4 space-y-3">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-mono uppercase tracking-wider text-[#4A5560]">
-                                Forensic Assessment
-                              </span>
-                              <span
-                                className="shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold font-mono"
-                                style={{
-                                  backgroundColor:
-                                    activeCase.riskScore >= 75
-                                      ? 'rgba(217, 112, 90, 0.15)'
-                                      : activeCase.riskScore >= 50
-                                      ? 'rgba(224, 164, 88, 0.15)'
-                                      : 'rgba(95, 201, 232, 0.15)',
-                                  color:
-                                    activeCase.riskScore >= 75
-                                      ? '#D9705A'
-                                      : activeCase.riskScore >= 50
-                                      ? '#E0A458'
-                                      : '#5FC9E8',
-                                  border: `1px solid ${
-                                    activeCase.riskScore >= 75
-                                      ? 'rgba(217, 112, 90, 0.3)'
-                                      : activeCase.riskScore >= 50
-                                      ? 'rgba(224, 164, 88, 0.3)'
-                                      : 'rgba(95, 201, 232, 0.3)'
-                                  }`,
-                                }}
-                              >
-                                {activeCase.overallRisk} RISK
-                              </span>
-                            </div>
-
-                            {/* Gauge */}
-                            <div className="flex flex-col items-center justify-center py-2">
-                              <ThreatIndexGauge
-                                score={activeCase.riskScore}
-                                size={140}
-                                radius={54}
-                                strokeWidth={8}
-                              />
-                            </div>
-
-                            {/* Full tactics list */}
-                            <div className="space-y-1.5">
-                              <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-[#4A5560] mb-2">
-                                <span>Tactics Identified</span>
-                                <span className="text-[#5FC9E8]">SIGNAL ANALYSIS</span>
-                              </div>
-                              {activeCase.synthesis.tacticsObserved.map((tactic, idx) => {
-                                const isHigh = activeCase.riskScore >= 75;
-                                const barColor = isHigh ? '#D9705A' : '#E0A458';
-                                const TacticIcon = getTacticIcon(tactic);
-                                return (
-                                  <div key={idx} className="flex items-center gap-3 py-1 min-w-0">
-                                    <div
-                                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md"
-                                      style={{ backgroundColor: `${barColor}18`, color: barColor }}
-                                    >
-                                      <TacticIcon className="h-3 w-3" />
-                                    </div>
-                                    <div className="h-1.5 w-7 shrink-0 overflow-hidden rounded-full bg-white/[0.08]">
-                                      <div
-                                        className="h-full rounded-full"
-                                        style={{
-                                          width: isHigh ? '100%' : '70%',
-                                          backgroundColor: barColor,
-                                          boxShadow: `0 0 6px ${barColor}88`
-                                        }}
-                                      />
-                                    </div>
-                                    <span className="font-mono text-[11px] text-[#E8ECEF] leading-snug break-words flex-1 min-w-0">
-                                      {getTacticPlainLanguage(tactic)}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          {/* IMPACT & ORIGIN READOUT */}
-                          <div
-                            className="space-y-3 pt-4"
-                            style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
-                          >
-                            <div className="text-[10px] font-mono uppercase tracking-wider text-[#4A5560]">
-                              Impact &amp; Origin Readout
-                            </div>
-                            <div className="space-y-3 min-w-0">
-                              <div className="flex items-start gap-2.5 min-w-0">
-                                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#D9705A]/15 text-[#D9705A] mt-0.5">
-                                  <ShieldAlert className="h-3.5 w-3.5" />
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#7A8794]">
-                                    Potential Impact
-                                  </div>
-                                  <p className="mt-0.5 break-words font-sans text-xs leading-relaxed text-[#E8ECEF]">
-                                    {activeCase.synthesis.potentialImpact}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-start gap-2.5 min-w-0">
-                                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#5FC9E8]/15 text-[#5FC9E8] mt-0.5">
-                                  <Globe className="h-3.5 w-3.5" />
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#7A8794]">
-                                    Infrastructure Origin
-                                  </div>
-                                  <p className="mt-0.5 break-words font-mono text-xs leading-relaxed text-[#5FC9E8]">
-                                    {activeCase.synthesis.originAssessment}
-                                  </p>
-                                </div>
-                              </div>
-                              {activeCase.synthesis.recommendedLegalSteps && (
-                                <div className="flex items-start gap-2.5 min-w-0">
-                                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.06] text-[#7A8794] mt-0.5">
-                                    <FileText className="h-3.5 w-3.5" />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#7A8794]">
-                                      Legal Steps
-                                    </div>
-                                    <p className="mt-0.5 break-words font-sans text-xs leading-relaxed text-[#7A8794]">
-                                      {activeCase.synthesis.recommendedLegalSteps}
-                                    </p>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* EVIDENCE CONSTELLATION */}
-                          <div
-                            className="space-y-3 pt-4"
-                            style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
-                          >
-                            <div className="flex items-center gap-2">
-                              <Lock className="h-3.5 w-3.5 shrink-0 text-[#5FC9E8]" />
-                              <span className="text-xs font-semibold text-[#E8ECEF]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                                Evidence Chain of Custody
-                              </span>
-                            </div>
-                            <p className="text-xs leading-relaxed text-[#7A8794]">
-                              All evidence items, header hashes, and chronology records are preserved
-                              with ISO timestamping for regulatory or police reporting.
-                            </p>
-
-                            <EvidenceConstellation
-                              ref={constellationRef}
-                              key={`constellation-${technicalOpen}-${activeCase.id}`}
-                              evidence={activeCase.evidence}
-                              caseTitle={activeCase.title}
-                            />
-
-                            {/* SHA-256 */}
-                            <motion.div
-                              initial={{ boxShadow: '0 0 0px rgba(95, 201, 232, 0)' }}
-                              animate={{
-                                boxShadow: [
-                                  '0 0 0px rgba(95, 201, 232, 0)',
-                                  '0 0 22px rgba(95, 201, 232, 0.6)',
-                                  '0 0 0px rgba(95, 201, 232, 0)'
-                                ]
-                              }}
-                              transition={{ duration: 0.7, delay: 0.35, ease: 'easeOut' }}
-                              className="w-full min-w-0 rounded-xl border border-white/[0.08] bg-[#06080B]/90 p-3 flex items-center justify-between gap-2.5 text-[11px] font-mono text-[#7A8794] shadow-xs"
-                            >
-                              <div className="flex items-center gap-2 min-w-0 truncate">
-                                <span className="text-[#5FC9E8] font-bold shrink-0">SHA256:</span>
-                                <span className="truncate text-[#E8ECEF]">
-                                  7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  navigator.clipboard?.writeText(
-                                    '7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069'
-                                  );
-                                  setHasCopiedHash(true);
-                                  setTimeout(() => setHasCopiedHash(false), 2000);
-                                }}
-                                title="Copy SHA-256 Hash"
-                                className="shrink-0 p-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-[#5FC9E8] transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-mono"
-                              >
-                                {hasCopiedHash ? (
-                                  <>
-                                    <Check className="w-3.5 h-3.5 text-[#5FC9E8]" />
-                                    <span>Copied</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy className="w-3.5 h-3.5 text-[#5FC9E8]" />
-                                    <span>Copy</span>
-                                  </>
-                                )}
-                              </button>
-                            </motion.div>
-
-                            {/* Download button */}
-                            <button
-                              onClick={handleExportReport}
-                              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-[#5FC9E8] hover:bg-[#7be2fe] py-3 text-xs font-semibold text-[#0A0D10] transition-all duration-200"
-                              style={{ boxShadow: '0 8px 30px -8px rgba(95, 201, 232, 0.5)' }}
-                            >
-                              <Download className="h-4 w-4" />
-                              <span>Download Preservation Packet</span>
-                            </button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                    {getVerdictSentence(activeCase.category, activeCase.riskScore)}
+                  </p>
+                  <p className="mt-1 text-xs sm:text-[13px] leading-relaxed text-[#7A8794]">
+                    {getVerdictContext(activeCase.category, activeCase.synthesis.tacticsObserved)}
+                  </p>
                 </div>
+              </div>
 
+              {/* Condensed Key Findings element directly below verdict banner */}
+              <div
+                id="workspace-condensed-key-findings"
+                className="rounded-2xl border border-white/[0.08] bg-[#0D1116]/80 px-4 py-3 text-xs leading-relaxed flex flex-wrap items-center gap-x-2 gap-y-1.5 shadow-sm"
+              >
+                <span className="font-semibold text-[#5FC9E8] font-mono text-xs shrink-0 mr-1">
+                  Key Findings:
+                </span>
+                {keyFindingsList.map((item, idx) => (
+                  <React.Fragment key={`kf-${item.label}-${idx}`}>
+                    <button
+                      type="button"
+                      onClick={() => scrollToEvidenceCard(item.evidenceId)}
+                      className="inline-flex items-center gap-1 text-[#E8ECEF] hover:text-[#5FC9E8] cursor-pointer transition-colors group text-left"
+                      title={`Scroll to full evidence card for ${item.label}`}
+                    >
+                      <span className="font-medium group-hover:underline underline-offset-2">
+                        {item.label}
+                      </span>
+                      <span className="font-mono text-[11px] text-[#7A8794] group-hover:text-[#5FC9E8]/80">
+                        ({item.score} · {item.severity})
+                      </span>
+                    </button>
+                    {idx < keyFindingsList.length - 1 && (
+                      <span className="text-[#4A5560] select-none font-bold">·</span>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+
+              {/* Tab Navigation */}
+              {renderTabNav()}
+
+              {/* Active Tab Content */}
+              {activeTab === 'evidence' && (
+                <div className="space-y-6">
+                  {renderAnalyzer()}
+                  {renderEvidenceSection(true)}
+                  {renderTechnicalDetailsSection(true)}
+                </div>
+              )}
+              {activeTab === 'timeline' && renderTimelineSection()}
+              {activeTab === 'actions' && renderActionsSection()}
+            </div>
+          ) : (
+            /* =======================================================
+               TECHNICAL VIEW (Power-user 2-column layout)
+            ======================================================= */
+            <div className="grid min-w-0 grid-cols-1 gap-8 xl:grid-cols-12">
+              <div className="min-w-0 space-y-6 xl:col-span-8">
+                {renderTabNav()}
+                {activeTab === 'evidence' && (
+                  <div className="min-w-0 space-y-4">
+                    {renderAnalyzer()}
+                    {renderEvidenceSection(false)}
+                  </div>
+                )}
+                {activeTab === 'timeline' && renderTimelineSection()}
+                {activeTab === 'actions' && renderActionsSection()}
+              </div>
+
+              <div className="min-w-0 xl:col-span-4">
+                {renderForensicSummaryPanel()}
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* =========================================================

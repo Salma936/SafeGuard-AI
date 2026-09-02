@@ -4,7 +4,7 @@ import { Upload, AlertTriangle, ShieldCheck, Image as ImageIcon, ArrowLeft, Vide
 import { ViewMode } from '../types';
 import { ForensicReportSkeleton } from './SkeletonLoader';
 import { LiveStatusIndicator } from './LiveStatusIndicator';
-import { analyzeSuspiciousVideo } from '../services/api';
+import { analyzeSuspiciousVideo, fetchWithTimeout } from '../services/api';
 
 interface Finding {
   label: string;
@@ -142,7 +142,7 @@ export default function ScreenshotAnalyzer({ onNavigate }: ScreenshotAnalyzerPro
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetch(API_ENDPOINT, {
+      const res = await fetchWithTimeout(API_ENDPOINT, {
         method: 'POST',
         body: formData,
       });
@@ -167,15 +167,26 @@ export default function ScreenshotAnalyzer({ onNavigate }: ScreenshotAnalyzerPro
       <div className="sticky top-0 z-20 bg-[#06080B]/90 backdrop-blur-md border border-white/[0.06] rounded-3xl p-4 sm:p-5 shadow-xl flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           {onNavigate && (
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => onNavigate('landing')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-[#E8ECEF] hover:text-white bg-[#0D1116] hover:bg-white/[0.06] rounded-full transition-colors border border-white/[0.08] cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Home</span>
-            </motion.button>
+            <div className="flex items-center gap-2">
+              <motion.button
+                id="screenshot-analyzer-back-btn"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => onNavigate('investigate')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#5FC9E8] hover:text-[#8ee1f9] bg-[#5FC9E8]/10 hover:bg-[#5FC9E8]/20 rounded-full transition-colors border border-[#5FC9E8]/30 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to Investigation</span>
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => onNavigate('landing')}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-[#7A8794] hover:text-[#E8ECEF] bg-[#0D1116] hover:bg-white/[0.06] rounded-full transition-colors border border-white/[0.08] cursor-pointer"
+              >
+                <span>Home</span>
+              </motion.button>
+            </div>
           )}
           <div>
             <h2 className="text-sm sm:text-base font-semibold text-[#E8ECEF] tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>

@@ -27,6 +27,7 @@ export interface EvidenceItem {
   metadata?: Record<string, string>;
   sha256Hash?: string;
   contentLocation?: string;
+  elaResult?: ForensicsAnalysisResult;
 }
 
 export interface TimelineEvent {
@@ -68,6 +69,10 @@ export interface IncidentCase {
     potentialImpact: string;
     originAssessment: string;
     recommendedLegalSteps?: string;
+  };
+  headline?: {
+    line1: string[];
+    line2?: string[];
   };
 }
 

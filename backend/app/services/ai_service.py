@@ -139,24 +139,10 @@ class AIService:
         if target_model in ["gemini-2.0-flash", "models/gemini-2.0-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash"]:
             target_model = "gemini-3.6-flash"
 
-        try:
-            response = self.client.models.generate_content(
-                model=target_model,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    response_mime_type="application/json",
-                    temperature=0.1
-                )
-            )
-            return response.text or "{}"
-        except Exception as err:
-            err_str = str(err)
-            if ("404" in err_str or "not found" in err_str.lower() or "gemini-2.0-flash" in err_str) and target_model != "gemini-3.6-flash":
-                print(f"[AIService] Model {target_model} unavailable. Retrying with gemini-3.6-flash: {err}")
-                self.model = "gemini-3.6-flash"
+        for attempt in range(3):
+            try:
                 response = self.client.models.generate_content(
-                    model="gemini-3.6-flash",
+                    model=target_model,
                     contents=contents,
                     config=types.GenerateContentConfig(
                         system_instruction=SYSTEM_INSTRUCTION,
@@ -165,7 +151,22 @@ class AIService:
                     )
                 )
                 return response.text or "{}"
-            raise
+            except Exception as err:
+                err_str = str(err)
+                if ("404" in err_str or "not found" in err_str.lower() or "gemini-2.0-flash" in err_str) and target_model != "gemini-3.6-flash":
+                    print(f"[AIService] Model {target_model} unavailable. Retrying with gemini-3.6-flash: {err}")
+                    target_model = "gemini-3.6-flash"
+                    self.model = "gemini-3.6-flash"
+                    continue
+                if ("429" in err_str or "resource_exhausted" in err_str.lower() or "quota exceeded" in err_str.lower() or "503" in err_str) and target_model != "gemini-3.5-flash":
+                    print(f"[AIService] Model {target_model} rate limited/busy ({err_str[:60]}). Falling back to gemini-3.5-flash...")
+                    target_model = "gemini-3.5-flash"
+                    continue
+                if ("503" in err_str or "high demand" in err_str.lower() or "unavailable" in err_str.lower() or "429" in err_str) and attempt < 2:
+                    print(f"[AIService] Transient spike ({err_str[:60]}), retrying in {attempt + 1}s...")
+                    time.sleep(1.0 * (attempt + 1))
+                    continue
+                raise
 
     def analyze_text(self, text: str, incident_id: Optional[str] = None) -> InvestigationResultSchema:
         """Analyze text message or digital evidence content."""
@@ -203,10 +204,14 @@ Do NOT label this URL as malicious solely because it is unusual unless structura
         inc_id = incident_id or f"inc-{uuid.uuid4().hex[:8]}"
         
         if self.client and GENAI_SDK_AVAILABLE:
-            part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
-            prompt = f"Incident ID: {inc_id}\nAnalyze this uploaded screenshot / image evidence for fake login portals, security alerts, extortion threats, or social engineering lures."
-            raw_json = self._call_gemini([part, prompt])
-            return self._parse_and_sanitize(raw_json, inc_id, fallback_threat="Social Engineering")
+            try:
+                part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+                prompt = f"Incident ID: {inc_id}\nAnalyze this uploaded screenshot / image evidence for fake login portals, security alerts, extortion threats, or social engineering lures."
+                raw_json = self._call_gemini([part, prompt])
+                return self._parse_and_sanitize(raw_json, inc_id, fallback_threat="Social Engineering")
+            except Exception as err:
+                print(f"[AIService] analyze_image fallback due to upstream API error: {err}")
+                return self._parse_and_sanitize("{}", inc_id, fallback_threat="Social Engineering")
         else:
             raise ValueError("Gemini API client unavailable for image analysis.")
 

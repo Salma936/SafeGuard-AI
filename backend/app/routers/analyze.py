@@ -1,3 +1,4 @@
+import asyncio
 import time
 import base64
 # pyrefly: ignore [missing-import]
@@ -29,10 +30,11 @@ async def analyze_text_endpoint(payload: TextAnalysisRequest):
 
     start_time = time.time()
     try:
-        result = ai_service.analyze_text(text_content)
+        result = await asyncio.to_thread(ai_service.analyze_text, text_content)
         duration_ms = int((time.time() - start_time) * 1000)
         
-        bigquery_service.log_event(
+        await asyncio.to_thread(
+            bigquery_service.log_event,
             event_name="analysis_completed",
             incident_id=result.incident_id,
             threat_type=result.threat_type,
@@ -56,10 +58,11 @@ async def analyze_url_endpoint(payload: UrlAnalysisRequest):
 
     start_time = time.time()
     try:
-        result = ai_service.analyze_url(payload.url)
+        result = await asyncio.to_thread(ai_service.analyze_url, payload.url)
         duration_ms = int((time.time() - start_time) * 1000)
 
-        bigquery_service.log_event(
+        await asyncio.to_thread(
+            bigquery_service.log_event,
             event_name="analysis_completed",
             incident_id=result.incident_id,
             threat_type=result.threat_type,
@@ -123,14 +126,16 @@ async def analyze_image_endpoint(request: Request):
                 detail="Must provide an image file upload or image_b64 string."
             )
 
-        result = ai_service.analyze_image(
+        result = await asyncio.to_thread(
+            ai_service.analyze_image,
             image_bytes,
             mime_type=mime_type
         )
 
         duration_ms = int((time.time() - start_time) * 1000)
 
-        bigquery_service.log_event(
+        await asyncio.to_thread(
+            bigquery_service.log_event,
             event_name="analysis_completed",
             incident_id=result.incident_id,
             threat_type=result.threat_type,
@@ -169,10 +174,11 @@ async def analyze_audio_upload_endpoint(
         if not audio_bytes:
             raise HTTPException(status_code=400, detail="Must provide an audio file upload.")
 
-        result = ai_service.analyze_audio(audio_bytes, mime_type=mime_type)
+        result = await asyncio.to_thread(ai_service.analyze_audio, audio_bytes, mime_type=mime_type)
         duration_ms = int((time.time() - start_time) * 1000)
 
-        bigquery_service.log_event(
+        await asyncio.to_thread(
+            bigquery_service.log_event,
             event_name="analysis_completed",
             incident_id=result.incident_id,
             threat_type=result.threat_type,
@@ -206,10 +212,11 @@ async def analyze_audio_base64_endpoint(
         audio_bytes = base64.b64decode(clean_b64)
         mime_type = payload.mime_type or "audio/mp3"
 
-        result = ai_service.analyze_audio(audio_bytes, mime_type=mime_type)
+        result = await asyncio.to_thread(ai_service.analyze_audio, audio_bytes, mime_type=mime_type)
         duration_ms = int((time.time() - start_time) * 1000)
 
-        bigquery_service.log_event(
+        await asyncio.to_thread(
+            bigquery_service.log_event,
             event_name="analysis_completed",
             incident_id=result.incident_id,
             threat_type=result.threat_type,
@@ -278,9 +285,10 @@ async def analyze_video_upload_endpoint(
         if not video_bytes:
             raise HTTPException(status_code=400, detail="Must provide a video file upload.")
 
-        result = ai_service.analyze_video(video_bytes, mime_type=mime_type)
+        result = await asyncio.to_thread(ai_service.analyze_video, video_bytes, mime_type=mime_type)
         duration_ms = int((time.time() - start_time) * 1000)
-        bigquery_service.log_event(
+        await asyncio.to_thread(
+            bigquery_service.log_event,
             event_name="analysis_completed",
             incident_id=result.incident_id,
             threat_type=result.threat_type,
@@ -314,9 +322,10 @@ async def analyze_video_base64_endpoint(
         video_bytes = base64.b64decode(clean_b64)
         mime_type = payload.mime_type or "video/mp4"
 
-        result = ai_service.analyze_video(video_bytes, mime_type=mime_type)
+        result = await asyncio.to_thread(ai_service.analyze_video, video_bytes, mime_type=mime_type)
         duration_ms = int((time.time() - start_time) * 1000)
-        bigquery_service.log_event(
+        await asyncio.to_thread(
+            bigquery_service.log_event,
             event_name="analysis_completed",
             incident_id=result.incident_id,
             threat_type=result.threat_type,
@@ -360,9 +369,10 @@ async def analyze_email_endpoint(request: Request):
         if not email_data:
             raise HTTPException(status_code=400, detail="Must provide an .eml file upload or structured email JSON payload.")
 
-        result = ai_service.analyze_email(email_data)
+        result = await asyncio.to_thread(ai_service.analyze_email, email_data)
         duration_ms = int((time.time() - start_time) * 1000)
-        bigquery_service.log_event(
+        await asyncio.to_thread(
+            bigquery_service.log_event,
             event_name="analysis_completed",
             incident_id=result.incident_id,
             threat_type=result.threat_type,
@@ -413,9 +423,10 @@ async def analyze_document_endpoint(request: Request):
         if not doc_bytes:
             raise HTTPException(status_code=400, detail="Must provide a document file upload or doc_b64 string.")
 
-        result = ai_service.analyze_document(doc_bytes, mime_type=mime_type)
+        result = await asyncio.to_thread(ai_service.analyze_document, doc_bytes, mime_type=mime_type)
         duration_ms = int((time.time() - start_time) * 1000)
-        bigquery_service.log_event(
+        await asyncio.to_thread(
+            bigquery_service.log_event,
             event_name="analysis_completed",
             incident_id=result.incident_id,
             threat_type=result.threat_type,

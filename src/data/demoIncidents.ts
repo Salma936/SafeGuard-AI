@@ -4,6 +4,10 @@ export const DEMO_INCIDENTS: IncidentCase[] = [
   {
     id: 'inc-01',
     title: 'Targeted Credential Harvesting & Account Takeover Attempt',
+    headline: {
+      line1: ['TARGETED', 'CREDENTIAL', 'HARVESTING'],
+      line2: ['&', 'ACCOUNT', 'TAKEOVER', 'ATTEMPT']
+    },
     category: 'Phishing & Impersonation',
     summary: 'A multi-channel coercion campaign masquerading as IT Security urging an immediate password change via a lookalike domain, followed by suspicious session authorization requests.',
     dateReported: 'August 18, 2026',
@@ -190,12 +194,16 @@ export const DEMO_INCIDENTS: IncidentCase[] = [
       ],
       potentialImpact: 'High risk of unauthorized email / workspace access if session cookie or MFA push was accepted.',
       originAssessment: 'Automated phishing infrastructure hosted on bulletproof European range with Namecheap proxy.',
-      recommendedLegalSteps: 'Preserve evidence hash and submit report to FTC.gov / IC3.gov if financial accounts were linked.'
+      recommendedLegalSteps: 'Preserve evidence hash and report to your local cybercrime authority or financial institution if accounts were linked.'
     }
   },
   {
     id: 'inc-02',
     title: 'Extortion & Deepfake Video Harassment Coercion',
+    headline: {
+      line1: ['EXTORTION', '&', 'DEEPFAKE', 'VIDEO'],
+      line2: ['HARASSMENT', 'COERCION']
+    },
     category: 'Extortion & Harassment',
     summary: 'Anonymous adversary sent fabricated media claiming illicit camera recordings, demanding cryptocurrency payment within 48 hours.',
     dateReported: 'August 16, 2026',
@@ -267,7 +275,7 @@ export const DEMO_INCIDENTS: IncidentCase[] = [
       ],
       potentialImpact: 'Low technical risk (no device malware detected); psychological distress and spam risk.',
       originAssessment: 'Automated mass extortion botnet running against compromised breach databases.',
-      recommendedLegalSteps: 'Report message to FBI IC3 and flag address to Chainalysis extortion tracking.'
+      recommendedLegalSteps: 'Report message to your local cybercrime authority and flag address to cryptocurrency extortion tracking.'
     }
   }
 ];
