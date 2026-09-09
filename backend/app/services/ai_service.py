@@ -3,6 +3,7 @@ import uuid
 import time
 import base64
 import re
+import random
 from typing import Dict, Any, Optional
 from backend.app.config import settings
 from backend.app.schemas import (
@@ -131,42 +132,64 @@ class AIService:
                 print(f"[AIService] Warning: Failed to create Gemini client: {e}")
 
     def _call_gemini(self, contents: list) -> str:
-        """Call Gemini API with structured JSON output instructions."""
+        """Call Gemini API with structured JSON output, explicit per-request timeout, and multi-tier model fallback."""
         if not self.client:
             raise ValueError("GEMINI_API_KEY environment variable is not configured or SDK is unavailable.")
 
-        target_model = self.model or "gemini-3.6-flash"
-        if target_model in ["gemini-2.0-flash", "models/gemini-2.0-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash"]:
-            target_model = "gemini-3.6-flash"
+        # Candidate fallback models in priority order
+        model_candidates = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.6-flash"]
+        configured_model = self.model or "gemini-3.5-flash"
+        if configured_model in ["gemini-2.0-flash", "models/gemini-2.0-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash"]:
+            configured_model = "gemini-3.5-flash"
 
-        for attempt in range(3):
+        if configured_model in model_candidates:
+            model_candidates.remove(configured_model)
+            model_candidates.insert(0, configured_model)
+        else:
+            model_candidates.insert(0, configured_model)
+
+        last_error = None
+        max_attempts = 4
+
+        for attempt in range(max_attempts):
+            target_model = model_candidates[min(attempt, len(model_candidates) - 1)]
             try:
+                # 35-second HTTP deadline ensures stalled API calls abort and trigger fallback
+                config = types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    response_mime_type="application/json",
+                    temperature=0.1,
+                    http_options=types.HttpOptions(timeout=35000)
+                )
                 response = self.client.models.generate_content(
                     model=target_model,
                     contents=contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_INSTRUCTION,
-                        response_mime_type="application/json",
-                        temperature=0.1
-                    )
+                    config=config
                 )
                 return response.text or "{}"
             except Exception as err:
+                last_error = err
                 err_str = str(err)
-                if ("404" in err_str or "not found" in err_str.lower() or "gemini-2.0-flash" in err_str) and target_model != "gemini-3.6-flash":
-                    print(f"[AIService] Model {target_model} unavailable. Retrying with gemini-3.6-flash: {err}")
-                    target_model = "gemini-3.6-flash"
-                    self.model = "gemini-3.6-flash"
+                print(f"[AIService] Attempt {attempt + 1}/{max_attempts} with model '{target_model}' failed: {err_str[:120]}")
+
+                # Transient failure patterns (503 overloaded, 429 quota/rate limit, 504 deadline, connection drops)
+                is_transient = any(code in err_str.lower() for code in [
+                    "503", "unavailable", "high demand", "overloaded",
+                    "429", "resource_exhausted", "quota",
+                    "504", "deadline", "timeout", "timed out",
+                    "500", "internal server error", "connection reset"
+                ])
+
+                is_not_found = "404" in err_str or "not found" in err_str.lower()
+
+                if (is_transient or is_not_found) and attempt < max_attempts - 1:
+                    sleep_time = min(3.5, (1.2 ** attempt) + random.uniform(0.2, 0.5))
+                    next_model = model_candidates[min(attempt + 1, len(model_candidates) - 1)]
+                    print(f"[AIService] Retrying with model '{next_model}' after {sleep_time:.2f}s backoff...")
+                    time.sleep(sleep_time)
                     continue
-                if ("429" in err_str or "resource_exhausted" in err_str.lower() or "quota exceeded" in err_str.lower() or "503" in err_str) and target_model != "gemini-3.5-flash":
-                    print(f"[AIService] Model {target_model} rate limited/busy ({err_str[:60]}). Falling back to gemini-3.5-flash...")
-                    target_model = "gemini-3.5-flash"
-                    continue
-                if ("503" in err_str or "high demand" in err_str.lower() or "unavailable" in err_str.lower() or "429" in err_str) and attempt < 2:
-                    print(f"[AIService] Transient spike ({err_str[:60]}), retrying in {attempt + 1}s...")
-                    time.sleep(1.0 * (attempt + 1))
-                    continue
-                raise
+
+                raise last_error
 
     def analyze_text(self, text: str, incident_id: Optional[str] = None) -> InvestigationResultSchema:
         """Analyze text message or digital evidence content."""
@@ -204,14 +227,10 @@ Do NOT label this URL as malicious solely because it is unusual unless structura
         inc_id = incident_id or f"inc-{uuid.uuid4().hex[:8]}"
         
         if self.client and GENAI_SDK_AVAILABLE:
-            try:
-                part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
-                prompt = f"Incident ID: {inc_id}\nAnalyze this uploaded screenshot / image evidence for fake login portals, security alerts, extortion threats, or social engineering lures."
-                raw_json = self._call_gemini([part, prompt])
-                return self._parse_and_sanitize(raw_json, inc_id, fallback_threat="Social Engineering")
-            except Exception as err:
-                print(f"[AIService] analyze_image fallback due to upstream API error: {err}")
-                return self._parse_and_sanitize("{}", inc_id, fallback_threat="Social Engineering")
+            part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+            prompt = f"Incident ID: {inc_id}\nAnalyze this uploaded screenshot / image evidence for fake login portals, security alerts, extortion threats, or social engineering lures."
+            raw_json = self._call_gemini([part, prompt])
+            return self._parse_and_sanitize(raw_json, inc_id, fallback_threat="Social Engineering")
         else:
             raise ValueError("Gemini API client unavailable for image analysis.")
 

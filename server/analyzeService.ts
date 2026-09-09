@@ -177,25 +177,43 @@ function sanitizeResult(parsed: any, defaultThreat: any, originalText?: string):
   };
 }
 
+async function callGeminiWithFallback(contents: any): Promise<string> {
+  const ai = getAiClient();
+  const models = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
+  let lastErr: any;
+
+  for (let attempt = 0; attempt < models.length; attempt++) {
+    const model = models[attempt];
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          responseMimeType: 'application/json',
+          temperature: 0.1
+        }
+      });
+      return response.text || '{}';
+    } catch (err: any) {
+      lastErr = err;
+      console.warn(`[Node AI Service] Model ${model} failed, attempting next fallback:`, err?.message || err);
+      if (attempt < models.length - 1) {
+        await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 export async function analyzeSuspiciousMessage(message: string): Promise<ThreatAnalysisResult> {
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
     throw new Error('Please provide a message to analyze.');
   }
 
-  const ai = getAiClient();
   const prompt = `Analyze this suspicious text message for digital safety threats:\n\n"""\n${message.trim()}\n"""`;
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-3.6-flash',
-    contents: prompt,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: 'application/json',
-      temperature: 0.1
-    }
-  });
-
-  const parsed = JSON.parse(response.text || '{}');
+  const rawJson = await callGeminiWithFallback(prompt);
+  const parsed = JSON.parse(rawJson);
   return sanitizeResult(parsed, 'Phishing', message);
 }
 
@@ -204,20 +222,9 @@ export async function analyzeSuspiciousUrl(url: string): Promise<ThreatAnalysisR
     throw new Error('Please provide a URL to analyze.');
   }
 
-  const ai = getAiClient();
   const prompt = `Analyze this suspicious URL for digital threats, typosquatting, credential harvesting, brand impersonation, and deceptive parameters:\n\nURL: ${url.trim()}\n\nDo NOT label this URL as malicious solely because it looks unusual unless threat indicators exist.`;
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-3.6-flash',
-    contents: prompt,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: 'application/json',
-      temperature: 0.1
-    }
-  });
-
-  const parsed = JSON.parse(response.text || '{}');
+  const rawJson = await callGeminiWithFallback(prompt);
+  const parsed = JSON.parse(rawJson);
   return sanitizeResult(parsed, 'Malicious Link');
 }
 
@@ -226,7 +233,6 @@ export async function analyzeSuspiciousImage(imageB64: string, mimeType: string 
     throw new Error('Please provide an image to analyze.');
   }
 
-  const ai = getAiClient();
   const cleanB64 = imageB64.includes(',') ? imageB64.split(',')[1] : imageB64;
   const imagePart = {
     inlineData: {
@@ -236,18 +242,8 @@ export async function analyzeSuspiciousImage(imageB64: string, mimeType: string 
   };
 
   const prompt = 'Analyze this screenshot/image evidence for fake login portals, security alerts, extortion threats, or social engineering lures.';
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-3.6-flash',
-    contents: [imagePart, prompt],
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: 'application/json',
-      temperature: 0.1
-    }
-  });
-
-  const parsed = JSON.parse(response.text || '{}');
+  const rawJson = await callGeminiWithFallback([imagePart, prompt]);
+  const parsed = JSON.parse(rawJson);
   return sanitizeResult(parsed, 'Social Engineering');
 }
 
@@ -256,7 +252,6 @@ export async function analyzeSuspiciousAudio(audioB64: string, mimeType: string 
     throw new Error('Please provide an audio recording to analyze.');
   }
 
-  const ai = getAiClient();
   const cleanB64 = audioB64.includes(',') ? audioB64.split(',')[1] : audioB64;
   const audioPart = {
     inlineData: {
@@ -266,17 +261,7 @@ export async function analyzeSuspiciousAudio(audioB64: string, mimeType: string 
   };
 
   const prompt = 'Transcribe and analyze this audio evidence for coercive voice calls, phone scams, extortion demands, or identity impersonation.';
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-3.6-flash',
-    contents: [audioPart, prompt],
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: 'application/json',
-      temperature: 0.1
-    }
-  });
-
-  const parsed = JSON.parse(response.text || '{}');
+  const rawJson = await callGeminiWithFallback([audioPart, prompt]);
+  const parsed = JSON.parse(rawJson);
   return sanitizeResult(parsed, 'Scam');
 }

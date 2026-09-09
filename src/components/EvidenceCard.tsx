@@ -172,6 +172,46 @@ export const getIndicatorPlainLanguage = (indicator: string): string => {
   return "Identified as a suspicious pattern commonly used in digital threat campaigns.";
 };
 
+export const isMediaManipulationEvidence = (ev: EvidenceItem): boolean => {
+  if (ev.type === 'video' || ev.type === 'audio') {
+    return true;
+  }
+  if (ev.elaResult) {
+    return true;
+  }
+
+  const textToScan = [
+    ev.title,
+    ...(ev.indicators || []),
+    ...(ev.metadata ? Object.values(ev.metadata) : [])
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  const mediaKeywords = [
+    'deepfake',
+    'synthetic media',
+    'synthetic voice',
+    'voice clone',
+    'audio spoof',
+    'manipulation likelihood',
+    'manipulation index',
+    'manipulation score',
+    'morphed',
+    'morphing',
+    'facial movement',
+    'facial synthesis',
+    'audio-visual sync',
+    'tts synthesis',
+    'image manipulation',
+    'video manipulation',
+    'audio manipulation',
+    'media forensics'
+  ];
+
+  return mediaKeywords.some((kw) => textToScan.includes(kw));
+};
+
 export const renderAnnotatedEvidence = (
   content: string,
   indicators: string[],
@@ -305,6 +345,7 @@ export const EvidenceCard: React.FC<EvidenceCardProps> = ({
   const isMed =
     ev.riskScore >= 50 || ev.riskLevel.toLowerCase() === 'medium';
   const severityColor = isHigh ? '#D9705A' : isMed ? '#E0A458' : '#5FC9E8';
+  const isMediaManipulation = isMediaManipulationEvidence(ev);
 
   const plainSentence =
     ev.indicators && ev.indicators.length > 0
@@ -348,7 +389,7 @@ export const EvidenceCard: React.FC<EvidenceCardProps> = ({
         ======================================================== */
         <div className="space-y-3">
           {/* Top Row: Icon, Title, and Severity Badge */}
-          <div className="flex min-w-0 items-center justify-between gap-3">
+          <div className="flex min-w-0 items-start justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <div
                 className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[8px] border"
@@ -379,17 +420,24 @@ export const EvidenceCard: React.FC<EvidenceCardProps> = ({
               </div>
             </div>
 
-            {/* Severity Badge */}
-            <span
-              className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold uppercase border tracking-wider"
-              style={{
-                backgroundColor: `${severityColor}15`,
-                borderColor: `${severityColor}35`,
-                color: severityColor
-              }}
-            >
-              {ev.riskLevel} Risk
-            </span>
+            {/* Severity Badge & Transparency Disclosure */}
+            <div className="shrink-0 flex flex-col items-end text-right">
+              <span
+                className="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold uppercase border tracking-wider"
+                style={{
+                  backgroundColor: `${severityColor}15`,
+                  borderColor: `${severityColor}35`,
+                  color: severityColor
+                }}
+              >
+                {ev.riskLevel} Risk
+              </span>
+              {isMediaManipulation && (
+                <span className="text-xs text-[#7A8794] font-mono mt-1 max-w-[240px] sm:max-w-xs leading-tight text-right font-normal">
+                  Based on Gemini multimodal analysis — not a specialized forensic classifier
+                </span>
+              )}
+            </div>
           </div>
 
           {/* ONE Plain-English Sentence & Details Toggle */}
@@ -557,7 +605,7 @@ export const EvidenceCard: React.FC<EvidenceCardProps> = ({
               </div>
             </div>
 
-            <div className="shrink-0 text-right">
+            <div className="shrink-0 text-right flex flex-col items-end">
               <div
                 className="text-[20px] font-bold font-mono leading-none"
                 style={{ color: severityColor }}
@@ -570,6 +618,11 @@ export const EvidenceCard: React.FC<EvidenceCardProps> = ({
               >
                 {ev.riskLevel.toLowerCase()} risk
               </div>
+              {isMediaManipulation && (
+                <span className="text-xs text-[#7A8794] font-mono mt-1.5 max-w-[240px] sm:max-w-xs leading-tight text-right font-normal">
+                  Based on Gemini multimodal analysis — not a specialized forensic classifier
+                </span>
+              )}
             </div>
           </div>
 

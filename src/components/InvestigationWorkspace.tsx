@@ -54,6 +54,7 @@ import {
   addIncidentEvidence
 } from '../services/api';
 import { MAX_VIDEO_SIZE_BYTES, isVideoFile, readFileAsBase64 } from '../utils/fileUtils';
+import { optimizeImageForAnalysis } from '../utils/imageOptimizer';
 import { detectCoerciveMediaThreat } from '../utils/threatClassifier';
 import { LiveStatusIndicator } from './LiveStatusIndicator';
 import { ThreatIndexGauge } from './ThreatIndexGauge';
@@ -663,9 +664,23 @@ export const InvestigationWorkspace: React.FC<
 
     // Custom evidence & real AI submission state
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisElapsedSeconds, setAnalysisElapsedSeconds] = useState(0);
     const [suspiciousMessageInput, setSuspiciousMessageInput] = useState('');
     const [analysisError, setAnalysisError] = useState<string | null>(null);
     const [analysisSuccess, setAnalysisSuccess] = useState<string | null>(null);
+
+    useEffect(() => {
+      let timer: any;
+      if (isAnalyzing) {
+        setAnalysisElapsedSeconds(0);
+        timer = setInterval(() => {
+          setAnalysisElapsedSeconds((prev) => prev + 1);
+        }, 1000);
+      } else {
+        setAnalysisElapsedSeconds(0);
+      }
+      return () => clearInterval(timer);
+    }, [isAnalyzing]);
 
     // Stored failed analysis context to allow immediate retry with the same input
     const [lastFailedAnalysis, setLastFailedAnalysis] = useState<{
@@ -1079,16 +1094,12 @@ export const InvestigationWorkspace: React.FC<
           (fileInput && fileInput.type.startsWith('image/'))
         ) {
           if (fileInput) {
-            const b64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = reject;
-              reader.readAsDataURL(fileInput);
-            });
+            // Optimize oversized screenshots for faster multimodal ingestion
+            const optimized = await optimizeImageForAnalysis(fileInput);
 
             // Execute analyzeSuspiciousImage (Gemini) and analyzeScreenshotForensics (ELA) in parallel
             const [geminiResult, elaResult] = await Promise.all([
-              analyzeSuspiciousImage(b64, fileInput.type, controller.signal),
+              analyzeSuspiciousImage(optimized.base64, optimized.mimeType, controller.signal),
               analyzeScreenshotForensics(fileInput, controller.signal).catch((elaErr) => {
                 console.warn('ELA analysis skipped or failed:', elaErr);
                 return null;
@@ -1455,11 +1466,56 @@ export const InvestigationWorkspace: React.FC<
 
         {isAnalyzing && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
             className="min-w-0 space-y-4 pt-2"
           >
+            {/* Live Forensic Progress Banner */}
+            <div className="rounded-2xl border border-[#5FC9E8]/30 bg-[#0A1017] p-4 text-[#E8ECEF] shadow-lg shadow-black/40">
+              <div className="flex items-center justify-between gap-3 mb-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-[#5FC9E8]/30 bg-[#5FC9E8]/10 text-[#5FC9E8]">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-xl bg-[#5FC9E8]/20 opacity-75" />
+                    <Sparkles className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: '4s' }} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-semibold text-[#5FC9E8]">
+                      {analysisElapsedSeconds < 4
+                        ? 'Ingesting Evidence & Parsing Payload...'
+                        : analysisElapsedSeconds < 10
+                        ? 'Extracting Observable Threat Indicators & IOCs...'
+                        : analysisElapsedSeconds < 20
+                        ? 'Deep Multimodal Forensic Analysis in Progress...'
+                        : 'Synthesizing Incident Summary & Action Plan...'}
+                    </h4>
+                    <p className="text-[11px] text-[#7A8794]">
+                      {analysisElapsedSeconds > 12
+                        ? 'SafeGuard AI neural engine is evaluating multi-factor forensic context. Please wait...'
+                        : 'SafeGuard AI threat engine is active.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-mono text-[#8C9BAE]">
+                  <Clock className="h-3 w-3 text-[#5FC9E8]" />
+                  <span>{analysisElapsedSeconds}s</span>
+                </div>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                <motion.div
+                  className="h-full bg-gradient-to-r from-[#5FC9E8] via-[#8C7CFF] to-[#D9705A]"
+                  animate={{
+                    x: ['-100%', '100%']
+                  }}
+                  transition={{
+                    repeat: Infinity,
+                    duration: 2,
+                    ease: 'easeInOut'
+                  }}
+                />
+              </div>
+            </div>
+
             <EvidenceCardSkeleton />
             <EvidenceCardSkeleton />
           </motion.div>
@@ -1482,7 +1538,9 @@ export const InvestigationWorkspace: React.FC<
                     {analysisError.toLowerCase().includes('timed out') ? 'Analysis Timed Out' : 'Analysis Failed'}
                   </h4>
                   <p className="mt-0.5 text-xs text-[#7A8794] leading-relaxed">
-                    {analysisError}
+                    {analysisError.toLowerCase().includes('timed out')
+                      ? 'The AI analysis service took longer than expected to complete. This can happen during peak load or when analyzing high-resolution media. Click Retry Analysis below.'
+                      : analysisError}
                   </p>
                 </div>
               </div>

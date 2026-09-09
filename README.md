@@ -117,6 +117,25 @@ docker build -t safeguard-ai .
 docker run -p 8080:8080 --env-file .env safeguard-ai
 ```
 
+### Live Demo & Cloud Run Cold-Start Prevention
+
+To guarantee zero cold-start latency and prevent request timeouts during live hackathon demos or judge reviews, deploy with at least 1 warm instance and an adequate request timeout:
+
+```bash
+gcloud run deploy safeguard-ai \
+  --image gcr.io/YOUR_PROJECT_ID/safeguard-ai \
+  --platform managed \
+  --region us-central1 \
+  --min-instances 1 \
+  --timeout 120s \
+  --memory 2Gi \
+  --cpu 2 \
+  --allow-unauthenticated
+```
+
+- `--min-instances 1`: Keeps 1 container instance always warm so initial demo requests do not suffer from the 5–10s container startup penalty.
+- `--timeout 120s`: Gives multimodal analysis (screenshots, audio transcripts, deepfake analysis) plenty of runway.
+
 The container runs:
 ```
 uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1

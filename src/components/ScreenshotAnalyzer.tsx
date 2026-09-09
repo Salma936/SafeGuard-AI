@@ -4,7 +4,7 @@ import { Upload, AlertTriangle, ShieldCheck, Image as ImageIcon, ArrowLeft, Vide
 import { ViewMode } from '../types';
 import { ForensicReportSkeleton } from './SkeletonLoader';
 import { LiveStatusIndicator } from './LiveStatusIndicator';
-import { analyzeSuspiciousVideo, fetchWithTimeout } from '../services/api';
+import { analyzeSuspiciousVideo, fetchWithTimeout, MULTIMODAL_TIMEOUT_MS } from '../services/api';
 
 interface Finding {
   label: string;
@@ -145,6 +145,7 @@ export default function ScreenshotAnalyzer({ onNavigate }: ScreenshotAnalyzerPro
       const res = await fetchWithTimeout(API_ENDPOINT, {
         method: 'POST',
         body: formData,
+        timeoutMs: MULTIMODAL_TIMEOUT_MS,
       });
 
       if (!res.ok) {

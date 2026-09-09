@@ -1,14 +1,16 @@
 import { ThreatAnalysisResult, AnalyticsSummary, ForensicsAnalysisResult } from '../types';
 
-export const DEFAULT_TIMEOUT_MS = 18000;
+export const DEFAULT_TIMEOUT_MS = 45000;
+export const MULTIMODAL_TIMEOUT_MS = 60000;
 
 export interface RequestOptions extends RequestInit {
   timeoutMs?: number;
 }
 
 /**
- * Robust fetch wrapper with timeout (15-20s) and AbortController integration.
- * Prevents requests from hanging indefinitely.
+ * Robust fetch wrapper with timeout (45-60s) and AbortController integration.
+ * Prevents requests from hanging indefinitely while giving multimodal models
+ * adequate time to analyze complex media.
  */
 export async function fetchWithTimeout(
   input: RequestInfo | URL,
@@ -43,7 +45,7 @@ export async function fetchWithTimeout(
   const startTime = Date.now();
 
   if (isDev) {
-    console.log(`[SafeGuard API] Request started: ${fetchOptions.method || 'GET'} ${endpointStr}`);
+    console.log(`[SafeGuard API] Request started: ${fetchOptions.method || 'GET'} ${endpointStr} (timeout: ${timeoutMs}ms)`);
   }
 
   try {
@@ -185,7 +187,9 @@ async function handleResponse<T>(response: Response): Promise<T> {
       else if (response.status === 401) errorMessage = 'Unauthorized request. Please log in again.';
       else if (response.status === 403) errorMessage = 'Access forbidden.';
       else if (response.status === 404) errorMessage = 'Analysis service endpoint not found.';
+      else if (response.status === 408) errorMessage = 'Request timed out. The server took too long to process the request.';
       else if (response.status === 429) errorMessage = 'Analysis rate limit reached. Please wait a moment before trying again.';
+      else if (response.status === 504) errorMessage = 'Analysis service timed out. The AI analysis engine did not respond in time. Please try again.';
       else if (response.status >= 500) errorMessage = 'Analysis service error. Please try again in a few moments.';
     }
     throw new Error(errorMessage);
@@ -208,6 +212,7 @@ export async function analyzeSuspiciousText(message: string, signal?: AbortSigna
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: trimmed, message: trimmed }),
+    timeoutMs: DEFAULT_TIMEOUT_MS,
     signal
   });
 
@@ -225,6 +230,7 @@ export async function analyzeSuspiciousUrl(url: string, signal?: AbortSignal): P
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url: trimmed }),
+    timeoutMs: DEFAULT_TIMEOUT_MS,
     signal
   });
 
@@ -245,6 +251,7 @@ export async function analyzeSuspiciousImage(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ image_b64: imageB64, mime_type: mimeType }),
+    timeoutMs: MULTIMODAL_TIMEOUT_MS,
     signal
   });
 
@@ -265,6 +272,7 @@ export async function analyzeSuspiciousAudio(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ audio_b64: audioB64, mime_type: mimeType }),
+    timeoutMs: MULTIMODAL_TIMEOUT_MS,
     signal
   });
 
@@ -285,6 +293,7 @@ export async function analyzeSuspiciousVideo(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ video_b64: videoB64, mime_type: mimeType }),
+    timeoutMs: MULTIMODAL_TIMEOUT_MS,
     signal
   });
 
@@ -299,6 +308,7 @@ export async function analyzeScreenshotForensics(file: File, signal?: AbortSigna
   const response = await fetchWithTimeout('/api/analyze-screenshot', {
     method: 'POST',
     body: formData,
+    timeoutMs: MULTIMODAL_TIMEOUT_MS,
     signal
   });
 

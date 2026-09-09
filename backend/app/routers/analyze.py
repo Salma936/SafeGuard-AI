@@ -17,6 +17,22 @@ from backend.app.services.bigquery_service import bigquery_service
 
 router = APIRouter(prefix="/api/analyze", tags=["AI Analysis Engine"])
 
+def _map_exception_to_http(err: Exception) -> HTTPException:
+    """Map exceptions to appropriate HTTP status codes (504 for timeout, 429 for rate limit)."""
+    err_str = str(err)
+    lower = err_str.lower()
+    if any(k in lower for k in ["deadline", "timeout", "timed out", "timedout"]):
+        return HTTPException(
+            status_code=504,
+            detail="The analysis engine timed out while processing your request. Please try again."
+        )
+    if any(k in lower for k in ["429", "quota", "resource_exhausted", "rate limit"]):
+        return HTTPException(
+            status_code=429,
+            detail="AI analysis rate limit or quota reached. Please wait a moment and retry."
+        )
+    return HTTPException(status_code=500, detail=err_str)
+
 @router.post("/text", response_model=InvestigationResultSchema)
 @router.post("", response_model=InvestigationResultSchema)
 async def analyze_text_endpoint(payload: TextAnalysisRequest):
@@ -44,8 +60,10 @@ async def analyze_text_endpoint(payload: TextAnalysisRequest):
             analysis_duration_ms=duration_ms
         )
         return result
+    except HTTPException:
+        raise
     except Exception as err:
-        raise HTTPException(status_code=500, detail=str(err))
+        raise _map_exception_to_http(err)
 
 @router.post("/url", response_model=InvestigationResultSchema)
 async def analyze_url_endpoint(payload: UrlAnalysisRequest):
@@ -72,8 +90,10 @@ async def analyze_url_endpoint(payload: UrlAnalysisRequest):
             analysis_duration_ms=duration_ms
         )
         return result
+    except HTTPException:
+        raise
     except Exception as err:
-        raise HTTPException(status_code=500, detail=str(err))
+        raise _map_exception_to_http(err)
 
 @router.post("/image", response_model=InvestigationResultSchema)
 async def analyze_image_endpoint(request: Request):
@@ -151,10 +171,7 @@ async def analyze_image_endpoint(request: Request):
         raise
 
     except Exception as err:
-        raise HTTPException(
-            status_code=500,
-            detail=str(err)
-        )
+        raise _map_exception_to_http(err)
 
 
 @router.post("/audio", response_model=InvestigationResultSchema)
@@ -191,7 +208,7 @@ async def analyze_audio_upload_endpoint(
     except HTTPException:
         raise
     except Exception as err:
-        raise HTTPException(status_code=500, detail=str(err))
+        raise _map_exception_to_http(err)
 
 
 @router.post("/audio/base64", response_model=InvestigationResultSchema)
@@ -229,7 +246,7 @@ async def analyze_audio_base64_endpoint(
     except HTTPException:
         raise
     except Exception as err:
-        raise HTTPException(status_code=500, detail=str(err))
+        raise _map_exception_to_http(err)
 
 
 def _parse_eml_bytes(raw: bytes) -> dict:
