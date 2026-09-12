@@ -11,7 +11,7 @@ Full-stack digital abuse detection platform — FastAPI backend + React/Vite fro
 - **Live Demo:** [safeguard-ai-830272410798.europe-west1.run.app](https://safeguard-ai-830272410798.europe-west1.run.app)
 - **Demo Video:** [Watch on YouTube](https://www.youtube.com/watch?v=J-r_ClZ6Ae8)
 - **Technical Documentation:** [Full Doc (Google Docs)](https://docs.google.com/document/d/1Po0MVJl-F9predqYrIzryZp44LKK8DV63yiONqh0Nik/edit?usp=sharing)
-- **Blog Post:** [Read on Medium]([your-medium-link-here](https://medium.com/@salma1664588/safeguard-ai-turning-scattered-digital-evidence-into-an-actual-investigation-2baec3c28ad3))
+- **Blog Post:** [Blog](https://medium.com/@salma1664588/safeguard-ai-turning-scattered-digital-evidence-into-an-actual-investigation-2baec3c28ad3)
 
 Built for **Patchamomma 2026** — Build Phase Submission
 
